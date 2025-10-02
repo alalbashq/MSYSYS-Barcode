@@ -1,0 +1,50 @@
+.model-full-page {
+    max-width:100% !important;
+    width: 100% !important;
+    margin: 0px !important;
+    padding: 0% !important;
+}
+.model-full-page .item {
+    overflow-y: scroll;
+    width: 49%;
+    max-height: 600px;
+}
+
+.model-full-page .item-divider {
+    width: 2%;  
+}
+.model-full-page .item-divider .item-divider-bar {
+    /* width: 0.2%;
+    height: 100%;
+    background-color: #eee;
+    position: fixed;
+    margin: 4px auto;   
+    right: 50%; */
+}
+#barcode-list > div.row > .col-xs-2{
+    flex: 0 0 18.666667%;
+    max-width: 20% !important;
+}
+
+#myIframe {
+    width: 100%;
+    max-height: 600px;
+    height: 600px;  
+}
+
+.desc-col>div{
+    max-height: max-content !important;
+}
+.w2ui-reset table tr th, .w2ui-reset table tr td {
+    font-family: OpenSans;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+#item-grid{
+    max-height: 500px;
+}
+
+input[type=radio] {
+    appearance: auto;
+}

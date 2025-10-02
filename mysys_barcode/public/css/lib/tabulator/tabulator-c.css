@@ -1,0 +1,236 @@
+.tabulator .tabulator-header {
+    background-color: rgb(228 242 237) !important;
+}
+
+.tabulator-row.tabulator-selectable:hover {
+    background-color: #e1efe330 !important;
+}
+
+.tabulator-row .tabulator-cell {
+    border: 1px solid #ededed8f;
+    background-color: #ffffff;
+}
+
+.tabulator .tabulator-header .tabulator-col,
+.snd-datatable-widget-box .tabulator .tabulator-header {
+    background: rgb(228 242 237) !important;
+    color: #000;
+}
+
+.tabulator-row.tabulator-selectable .table-render {
+    background-color: transparent;
+}
+
+.application-details .table-render table td,
+.application-details .table-render table th {
+    border: 1.5px solid #c4e1c5;
+    padding: 5px;
+}
+
+.tabulator .tabulator-tableholder {
+    border: 2px solid #dbdbdb;
+    padding: 3px;
+}
+
+.tabulator-group .tabulator-row .tabulator-cell {
+    border: 0px solid #ededed8f;
+    background-color: #ccc;
+    padding: 1px;
+}
+
+.tabulator-row.tabulator-selectable .tabulator-group-toggle {
+    border: 0px solid #ededed8f;
+    background-color: transparent;
+    padding: 1px;
+}
+
+/* .nav-tabs .nav-link.active, .nav-tabs .nav-item.show .nav-link {
+    color: #505a62;
+    background-color: #fff;
+    border-color: #dce0e3 #dce0e3 #fff;
+    border-bottom: 0px !important;
+} */
+
+.application-name {
+    margin: 0 6px;
+}
+
+.application-processing .nav-tabs .nav-link.active,
+.application-processing .nav-tabs .nav-item.show .nav-link {
+    padding: 3px;
+}
+
+.application-processing .nav-tabs .nav-link {
+    padding: 3px;
+}
+
+.application-processing .nav-tabs .nav-link.active div {
+    background-color: #e4f2ed;
+    padding: 6px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.application-processing .nav-tabs .nav-link div {
+    background-color: #fff;
+    padding: 6px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+#passport-tab .nav-link {
+    border: 0;
+    width: 100%;
+    border-bottom: 1.5px solid #e4f2ed;
+}
+
+.tabulator-group.tabulator-row .tabulator-cell {
+    background-color: transparent;
+}
+
+.tabulator-row.tabulator-selectable {
+    padding: 0 0px;
+}
+
+.item-name {
+    font-size: small;
+    color: #a5a3a3;
+}
+
+.tabulator-row.tabulator-group span {
+    color: #d00;
+    margin: 0px 2px;
+}
+
+.tabulator-group.tabulator-row {
+    display: flex;
+    gap: 0px;
+    cursor: pointer !important;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.tabulator-row.tabulator-selectable.tabulator-row-odd.tabulator-group.tabulator-group-level-0.tabulator-tree-level-0 [tabulator-field="item_decision"],
+.tabulator-row.tabulator-selectable.tabulator-row-odd.tabulator-group.tabulator-group-level-0.tabulator-tree-level-0 [tabulator-field="action"] {
+    background-color: transparent;
+    visibility: hidden;
+}
+
+.activity-status-open {
+    width: 100%;
+    display: inline-block;
+    padding: 2px 5px;
+    border: 1px solid #ffffff;
+    border-radius: 10px;
+    color: #000000 !important;
+    background-color: #e4f2ed;
+    position: relative;
+    top: -1px;
+    text-align: center;
+}
+
+.activity-status-closed {
+    width: 100%;
+    display: inline-block;
+    padding: 2px 5px;
+    border: 1px solid #ffffff;
+    border-radius: 10px;
+    color: #fff !important;
+    background-color: #26794d;
+    position: relative;
+    top: -1px;
+    text-align: center;
+}
+
+.stock-permit {
+    display: flex;
+}
+
+.permit-item {
+    box-shadow: var(--card-shadow);
+    background-color: var(--card-bg);
+    max-width: 70%;
+    height: calc(100vh - 95px);
+    width: 100%;
+    margin-left: 0px;
+    margin: 0px 6px;
+    right: 0px;
+    padding: 10px 0 20px 2px;
+    overflow-y: auto;
+}
+
+.permit-details {
+    box-shadow: var(--card-shadow);
+    background-color: var(--card-bg);
+    max-width: 29%;
+    height: calc(100vh - 95px);
+    width: 100%;
+    margin-left: 0px;
+    margin: 0px 6px;
+    right: 0px;
+    padding: 10px 0 20px 2px;
+    overflow-y: auto;
+}
+
+.modal .modal-header,
+.modal-footer,
+.grid-heading-row {
+    background-color: #e4f2ed !important;
+}
+
+.permit-details .permit-name {
+    padding: 6px;
+    border-bottom: 1.5px solid #26794d;
+    margin-bottom: 3px;
+    font-weight: 900;
+}
+
+.permit-details .layout-main-section-wrapper {
+    padding: 3px !important;
+}
+
+.tabulator-row.tabulator-selectable .tabulator-group-toggle {
+    border: 0px solid #ededed8f;
+    background-color: transparent;
+    padding: 1px;
+    white-space: break-spaces;
+    height: auto !important;
+}
+
+.tabulator-row .tabulator-cell {
+    border: 1px solid #ededed8f;
+    background-color: #ffffff;
+    white-space: break-spaces;
+    height: auto !important;
+}
+
+.tabulator-row.tabulator-selectable.tabulator-group {
+    background-color: #e4f2ed !important;
+}
+
+.tabulator-row.tabulator-selectable:not(.tabulator-group) {
+    background-color: transparent !important;
+}
+
+.tabulator-row .tabulator-cell {
+    border: 1px solid #ededed8f;
+    background-color: #ffffff;
+    white-space: break-spaces;
+    height: auto !important;
+    display: table-cell;
+}
+
+[data-route="Form/Stock Entry Permit Tool/Stock Entry Permit Tool"] .layout-main-section-wrapper {
+    margin-bottom: 0px;
+    padding: 1px 3px;
+}
+[data-route="Form/Stock Entry Permit Tool/Stock Entry Permit Tool"] .std-form-layout>.form-layout>.form-page {
+    /* border-radius: 0px 0px 8px 8px; */
+    border-radius: 10px 10px 0px 0px;
+    box-shadow: var(--card-shadow);
+    background-color: var(--card-bg);
+}
+[data-route="Form/Stock Entry Permit Tool/Stock Entry Permit Tool"] .form-group {
+    margin: 0px;
+}

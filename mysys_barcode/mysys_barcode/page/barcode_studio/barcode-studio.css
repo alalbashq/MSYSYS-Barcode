@@ -1,0 +1,193 @@
+#sidebar{
+    max-height: calc(100vh - 100px);
+}
+/* Barcode Builder Styles – Light Theme with Colored Accents (Fixed Layout) */
+
+/* General Container */
+.barcode-builder {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  background-color: #ffffff;
+  color: #333333;
+  min-height: 100vh;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+/* Tabs Styling */
+.nav-pills .nav-link {
+  border-radius: 0.25rem;
+  margin-right: 0.5rem;
+  color: #555555;
+  background-color: transparent;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+.nav-pills .nav-link.active {
+  background-color: #007acc;
+  color: #ffffff;
+}
+
+/* Ensure only active pane displays */
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* Builder Pane Layout */
+.builder-pane {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+}
+.builder-pane .bb-container {
+  display: flex;
+  flex: 1;
+  gap: 1rem;
+  box-sizing: border-box;
+}
+
+/* Sidebar Styling */
+.bb-sidebar {
+  flex: 0 0 360px;
+  background-color: #f7f9fc;
+  border: 1px solid #dde2e6;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.bb-sidebar label,
+.bb-sidebar h6 {
+  color: #333333;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+/* Template Dropdown Styling */
+#templates-dropdown {
+  width: 100%;
+  padding: 0.2rem;
+  background-color: #ffffff;
+  border: 1px solid #cccccc;
+  border-radius: 0.25rem;
+  color: #333333;
+  box-sizing: border-box;
+  margin-bottom: 1rem;
+}
+
+/* Components List Styling */
+#components-list .cmp-item {
+  display: block;
+  padding: 0.6rem;
+  margin-bottom: 0.5rem;
+  background-color: #ffffff;
+  border: 1px solid #007acc;
+  border-radius: 0.25rem;
+  text-align: center;
+  color: #007acc;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+#components-list .cmp-item:hover {
+  background-color: #007acc;
+  color: #ffffff;
+}
+
+/* Properties Panel Styling */
+#properties-panel {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 1rem;
+  background-color: #ffffff;
+  padding: 0.75rem;
+  border: 1px solid #dde2e6;
+  border-radius: 0.5rem;
+}
+#properties-panel .form-group {
+  margin-bottom: 1rem;
+}
+#properties-panel label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  color: #333333;
+  display: block;
+}
+#properties-panel input,
+#properties-panel select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #cccccc;
+  border-radius: 0.25rem;
+  box-sizing: border-box;
+  color: #333333;
+}
+
+/* Canvas Container Styling */
+.bb-canvas-container {
+  flex: 1;
+  background-color: #ffffff;
+  border: 1px solid #dde2e6;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bb-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  background-color: transparent;
+  border: none;
+  border-radius: 0.5rem;
+}
+
+/* Preview Pane Styling */
+.preview-pane {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f7f9fc;
+  border: 1px solid #dde2e6;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+.preview-pane img {
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
+  border: 1px solid #cccccc;
+  border-radius: 0.5rem;
+}
+
+/* Save/Update Button Styling */
+[data-page-route="barcode-builder"] .page-actions .btn {
+  background-color: #007acc;
+  border: none;
+  color: #ffffff;
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+}
+[data-page-route="barcode-builder"] .page-actions .btn:hover {
+  background-color: #005fa1;
+}
+.canvas-container{
+        border: 3px solid #989696;
+}
+
+[data-page-route="barcode-builder"] .page-actions .btn {
+    background-color: #007acc !important;
+    border: none;
+    color: #ffffff;
+    padding: 0.6rem 1.2rem;
+    border-radius: 0.25rem;
+    font-weight: 600;
+    transition: background-color 0.2s ease;
+}
+[data-page-route="barcode-builder"] button.btn.btn-default, div#driver-popover-item .driver-popover-footer button.btn-default{
+   background-color: #007acc !important;
+}

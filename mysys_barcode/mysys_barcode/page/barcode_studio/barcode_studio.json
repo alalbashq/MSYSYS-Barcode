@@ -1,0 +1,26 @@
+{
+ "content": null,
+ "creation": "2025-09-28 00:50:21.995545",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2025-09-28 00:50:21.995545",
+ "modified_by": "Administrator",
+ "module": "MYSYS Barcode",
+ "name": "barcode-studio",
+ "owner": "Administrator",
+ "page_name": "barcode-studio",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Stock Manager"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Barcode Studio"
+}

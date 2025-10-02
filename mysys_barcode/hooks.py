@@ -23,7 +23,18 @@ app_license = "mit"
 
 # Includes in <head>
 # ------------------
-
+pp_include_css = [
+	"/assets/mysys_barcode/css/barcode.css",
+	"/assets/mysys_barcode/css/tabulator/tabulator.min.css",
+	"/assets/mysys_barcode/css/tabulator-c.css",
+]
+app_include_js = [
+	"/assets/mysys_barcode/js/tabulator/tabulator.min.js",
+	"mysys_barcode_tool.bundle.js",
+	"/assets/mysys_barcode/js/fabric.js",
+	"/assets/mysys_barcode/js/JsBarcode.all.min.js",
+	"/assets/mysys_barcode/js/dialog.js",
+]
 # include js, css files in header of desk.html
 # app_include_css = "/assets/mysys_barcode/css/mysys_barcode.css"
 # app_include_js = "/assets/mysys_barcode/js/mysys_barcode.js"
@@ -241,4 +252,3 @@ app_license = "mit"
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
-

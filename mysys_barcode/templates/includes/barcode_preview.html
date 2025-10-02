@@ -1,0 +1,11 @@
+<div class="label" style="width: {{ width }}mm; height: {{ height }}mm">
+  {% for el in elements %}
+    {% if el.type == 'text' %}
+      <div class="el txt" style="left: {{ el.x }}mm; top: {{ el.y }}mm; font-size: {{ el.font_size or 9 }}pt;">
+        {{ el.text_value or '' }}
+      </div>
+    {% elif el.type == 'barcode' %}
+      <svg id="bc_{{ loop.index0 }}" class="el" style="left: {{ el.x }}mm; top: {{ el.y }}mm; width: {{ el.w }}mm; height: {{ el.h }}mm"></svg>
+    {% endif %}
+  {% endfor %}
+</div>

@@ -1,0 +1,65 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "creation": "2025-09-28 00:23:12.715758",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "section_break_mkf7"
+    ],
+    "fields": [
+        {
+            "fieldname": "section_break_mkf7",
+            "fieldtype": "Section Break"
+        },
+        {
+            "fieldname": "default_output",
+            "label": "Default Output",
+            "fieldtype": "Select",
+            "options": "HTML\nZPL",
+            "default": "HTML"
+        },
+        {
+            "fieldname": "default_dpi",
+            "label": "Default DPI",
+            "fieldtype": "Int",
+            "default": 203
+        },
+        {
+            "fieldname": "printer_name",
+            "label": "Default Printer (ZPL)",
+            "fieldtype": "Data"
+        },
+        {
+            "fieldname": "presets",
+            "label": "Size Presets (JSON)",
+            "fieldtype": "Code",
+            "options": "JSON"
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "issingle": 1,
+    "links": [],
+    "modified": "2025-09-28 00:23:12.715758",
+    "modified_by": "Administrator",
+    "module": "MYSYS Barcode",
+    "name": "Barcode Settings",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "print": 1,
+            "read": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": []
+}
