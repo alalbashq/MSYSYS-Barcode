@@ -15,7 +15,7 @@ if (frappe.router && frappe.router.on) {
 
 class BarcodeStudioPage {
   constructor(wrapper) {
-    this.wrapper = wrapper;
+    this.wrapper = wrapper; 
 
     // /app/barcode-studio/<doctype>/<name>/<template?>?ctx=<json|b64json>
     const r = frappe.get_route();
@@ -641,4 +641,3 @@ class BarcodeStudioPage {
     w.document.write(html); w.document.close(); w.focus(); w.print();
   }
 }
-  
