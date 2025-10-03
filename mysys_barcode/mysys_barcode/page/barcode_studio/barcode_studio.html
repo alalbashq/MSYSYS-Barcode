@@ -1,0 +1,399 @@
+<!-- Toolbar with Tabs -->
+<div class="bs-toolbar-tabs">
+	<ul class="nav nav-tabs" id="bs-top-tabs" role="tablist">
+		<li class="nav-item">
+			<a class="nav-link active" data-toggle="tab" href="#tab-home" role="tab">Home</a>
+		</li>
+		<li class="nav-item hide">
+			<a class="nav-link" data-toggle="tab" href="#tab-layout" role="tab">Layout</a>
+		</li>
+		<li class="nav-item hide ">
+			<a class="nav-link" data-toggle="tab" href="#tab-view" role="tab">View</a>
+		</li>
+		<li class="nav-item hide">
+			<a class="nav-link" data-toggle="tab" href="#tab-export" role="tab">Export</a>
+		</li>
+	</ul>
+
+	<div class="tab-content p-2 bs-toolbar">
+		<!-- HOME -->
+		<div class="tab-pane fade show active" id="tab-home" role="tabpanel">
+			<div class="bs-groups">
+				<!-- Document -->
+				<div class="bs-group hide" >
+					<div class="bs-group-title"></div>
+					<div class="bs-group-body">
+						<input id="bs-dt" class="form-control form-control-sm"
+						style="max-width:200px" value="{{ doctype || "" }}"/> <input id="bs-name"
+						class="form-control form-control-sm" style="max-width:200px"
+						placeholder="NAME" value="{{ docname || "" }}"/>
+					</div>
+				</div>
+				<div class="bs-group">
+					<div class="bs-group-title"></div>
+					<div class="bs-group-body" style="flex-wrap: nowrap;">
+						<select
+							id="bs-template"
+							class="form-control form-control-sm"
+							style="max-width: 220px;min-width: 200px;"
+						></select>
+						<button id="bs-reload" class="btn btn-light btn-sm" >Reload</button>
+						<button id="bs-save" class="btn btn-secondary btn-sm">Save</button>
+					</div>
+				</div>
+
+				<!-- Insert -->
+				<div class="bs-group">
+					<div class="bs-group-title">Insert</div>
+					<div class="bs-group-body">
+						<button id="bs-add-text" class="btn btn-light btn-sm">+ Text</button>
+						<button id="bs-add-barcode" class="btn btn-light btn-sm">+ Barcode</button>
+						<button id="bs-clear" class="btn btn-warning btn-sm">Clear</button>
+					</div>
+				</div>
+
+				<!-- Zoom -->
+				<div class="bs-group">
+					<div class="bs-group-title">Zoom</div>
+					<div class="bs-group-body">
+						<button id="bs-zoom-out" class="btn btn-light btn-sm">−</button>
+						<input
+							id="bs-zoom"
+							type="range"
+							min="10"
+							max="400"
+							value="100"
+							style="width: 140px"
+						/>
+						<button id="bs-zoom-in" class="btn btn-light btn-sm">+</button>
+						<button id="bs-zoom-reset" class="btn btn-light btn-sm" title="100%">
+							Reset
+						</button>
+						<span id="bs-zoom-label" class="small text-muted ml-1">100%</span>
+					</div>
+				</div>
+
+				<!-- Guides -->
+				<div class="bs-group">
+					<div class="bs-group-title">Guides</div>
+					<div class="bs-group-body">
+						<button id="bs-toggle-grid" class="btn btn-light btn-sm" title="Grid">
+							Grid
+						</button>
+						<select
+							id="bs-snap"
+							class="form-control form-control-sm"
+							title="Snap (mm)"
+							style="width: 90px"
+						>
+							<option value="0.5">0.5mm</option>
+							<option value="1" selected>1mm</option>
+							<option value="2">2mm</option>
+							<option value="5">5mm</option>
+						</select>
+						<button id="bs-fullscreen" class="btn btn-light btn-sm" title="Fullscreen">
+							⛶
+						</button>
+						<button id="bs-dark" class="btn btn-light btn-sm" title="Dark/Light">
+							🌙
+						</button>
+					</div>
+				</div>
+
+				<!-- Page -->
+				<div class="bs-group">
+					<div class="bs-group-title">Page</div>
+					<div class="bs-group-body">
+						<input
+							id="bs-w"
+							type="number"
+							class="form-control form-control-sm"
+							style="width: 90px"
+							value="{{ width_mm || 50 }}"
+						/>
+						<input
+							id="bs-h"
+							type="number"
+							class="form-control form-control-sm"
+							style="width: 90px"
+							value="{{ height_mm || 30 }}"
+						/>
+						<button id="bs-apply" class="btn btn-primary btn-sm">Apply</button>
+					</div>
+				</div>
+
+				<!-- Print -->
+				<div class="bs-group ml-auto">
+					<div class="bs-group-title">Print</div>
+					<div class="bs-group-body">
+						<select
+							id="bs-output"
+							class="form-control form-control-sm"
+							style="width: 140px"
+						>
+							<option value="html" selected>HTML (Vector)</option>
+							<option value="image">Image (HiDPI)</option>
+						</select>
+						<select
+							id="bs-dpi"
+							class="form-control form-control-sm"
+							style="width: 110px"
+							title="Image DPI"
+						>
+							<option value="300" selected>300 DPI</option>
+							<option value="600">600 DPI</option>
+							<option value="96">96 DPI</option>
+						</select>
+						<input
+							id="bs-copies"
+							type="number"
+							min="1"
+							class="form-control form-control-sm"
+							style="width: 90px"
+							placeholder="Copies"
+						/>
+						<button id="bs-print" class="btn btn-primary btn-sm">Print</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- LAYOUT -->
+		<div class="tab-pane fade hide" id="tab-layout" role="tabpanel">
+			<div class="bs-groups">
+				<div class="bs-group">
+					<div class="bs-group-title">Align</div>
+					<div class="bs-group-body">
+						<button class="btn btn-light btn-sm" data-align="left" title="Align Left">
+							⟸
+						</button>
+						<button
+							class="btn btn-light btn-sm"
+							data-align="center"
+							title="Align Center"
+						>
+							↔
+						</button>
+						<button
+							class="btn btn-light btn-sm"
+							data-align="right"
+							title="Align Right"
+						>
+							⟹
+						</button>
+						<button class="btn btn-light btn-sm" data-align="top" title="Align Top">
+							⟰
+						</button>
+						<button
+							class="btn btn-light btn-sm"
+							data-align="middle"
+							title="Align Middle"
+						>
+							↕
+						</button>
+						<button
+							class="btn btn-light btn-sm"
+							data-align="bottom"
+							title="Align Bottom"
+						>
+							⟱
+						</button>
+					</div>
+				</div>
+
+				<div class="bs-group">
+					<div class="bs-group-title">Text</div>
+					<div class="bs-group-body" id="text-style-group">
+						<button
+							class="btn btn-outline-secondary btn-sm"
+							data-textalign="left"
+							title="Text Left"
+						>
+							L
+						</button>
+						<button
+							class="btn btn-outline-secondary btn-sm"
+							data-textalign="center"
+							title="Text Center"
+						>
+							C
+						</button>
+						<button
+							class="btn btn-outline-secondary btn-sm"
+							data-textalign="right"
+							title="Text Right"
+						>
+							R
+						</button>
+						<button
+							class="btn btn-outline-secondary btn-sm"
+							id="btn-clear-value"
+							title="Clear Value"
+						>
+							Clear Value
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- VIEW -->
+		<div class="tab-pane fade hide" id="tab-view" role="tabpanel">
+			<div class="text-muted small">
+				More view options can go here (e.g., rulers toggle, theme, snapping preview…).
+			</div>
+		</div>
+
+		<!-- EXPORT -->
+		<div class="tab-pane fade hide" id="tab-export" role="tabpanel">
+			<div class="text-muted small">Export/Import template JSON, share, presets…</div>
+		</div>
+	</div>
+</div>
+
+<!-- Main Layout -->
+<div class="bs-layout mt-2">
+	<!-- LEFT: Fields -->
+	<div class="bs-side">
+  <div class="bs-collapsible" id="bs-fields-box">
+    <div class="head">
+      <div class="font-weight-bold">Fields</div>
+      <div class="d-flex align-items-center" style="gap:6px">
+        <!-- جديد: شريط بحث -->
+        <input id="bs-field-search" class="form-control form-control-sm" placeholder="Search fields…" style="width:160px">
+        <!-- جديد: زر طي/فتح الكل للـchild groups -->
+        <button class="btn btn-xs btn-light" id="bs-fields-collapse-toggle" title="Collapse/Expand All">Collapse All</button>
+        <button class="btn btn-xs btn-light" id="bs-toggle-fields">Hide</button>
+      </div>
+    </div>
+
+    <!-- NB: جعلنا body مرن + overflow -->
+    <div class="body" style=" overflow:auto">
+      <div id="bs-fields" class="small" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+  </div>
+</div>
+	<!-- CENTER: Canvas + Splitter + Preview -->
+	<div class="bs-center d-flex">
+		<div class="bb-ruler bb-ruler-x"></div>
+
+		<div
+			class="position-relative"
+			style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden"
+		>
+    	<div class="bs-groups" style="margin-bottom: 6px;">
+				<div class="bs-group">
+					<div class="bs-group-title">Align</div>
+					<div class="bs-group-body">
+						<button class="btn btn-light btn-sm" data-align="left" title="Align Left">
+							⟸
+						</button>
+						<button
+							class="btn btn-light btn-sm"
+							data-align="center"
+							title="Align Center"
+						>
+							↔
+						</button>
+						<button
+							class="btn btn-light btn-sm"
+							data-align="right"
+							title="Align Right"
+						>
+							⟹
+						</button>
+						<button class="btn btn-light btn-sm" data-align="top" title="Align Top">
+							⟰
+						</button>
+						<button
+							class="btn btn-light btn-sm"
+							data-align="middle"
+							title="Align Middle"
+						>
+							↕
+						</button>
+						<button
+							class="btn btn-light btn-sm"
+							data-align="bottom"
+							title="Align Bottom"
+						>
+							⟱
+						</button>
+					</div>
+				</div>
+
+				<div class="bs-group">
+					<div class="bs-group-title">Text</div>
+					<div class="bs-group-body" id="text-style-group">
+						<button
+							class="btn btn-outline-secondary btn-sm"
+							data-textalign="left"
+							title="Text Left"
+						>
+							L
+						</button>
+						<button
+							class="btn btn-outline-secondary btn-sm"
+							data-textalign="center"
+							title="Text Center"
+						>
+							C
+						</button>
+						<button
+							class="btn btn-outline-secondary btn-sm"
+							data-textalign="right"
+							title="Text Right"
+						>
+							R
+						</button>
+						<button
+							class="btn btn-outline-secondary btn-sm"
+							id="btn-clear-value"
+							title="Clear Value"
+						>
+							Clear Value
+						</button>
+					</div>
+				</div>
+			</div>
+			<div class="bb-ruler bb-ruler-y">        
+      </div>
+        
+			<!-- Canvas region -->
+			<div
+				id="bs-canvas-wrap"
+				class="bb-stage"
+				style="transform-origin: top left; overflow: auto; min-height: 160px"
+			>
+				<canvas id="bs-canvas"></canvas>
+			</div>
+
+			<!-- Resizable Splitter -->
+			<div id="bs-splitter" class="bs-splitter" title="Drag to resize"></div>
+
+			<!-- Preview region -->
+			<div id="bs-preview-pane" class="bs-preview-pane">
+				<div class="font-weight-bold small mb-1">Preview</div>
+				<div id="bs-preview"></div>
+			</div>
+		</div>
+
+		<div class="bs-status">
+			<div id="bs-status-left">Snap: <span id="bs-snap-label">1mm</span></div>
+			<div id="bs-status-right">W×H: <span id="bs-size-label"></span></div>
+		</div>
+	</div>
+
+	<!-- RIGHT: Properties -->
+<div class="bs-side">
+  <div class="bs-collapsible" id="bs-props-box">
+    <div class="head">
+      <div class="font-weight-bold">Properties</div>
+      <div><button class="btn btn-xs btn-light" id="bs-toggle-props">Hide</button></div>
+    </div>
+    <!-- جديد: نضمن التمرير الداخلي -->
+    <div class="body" style="min-height:0; max-height:100%; overflow:auto">
+      <div id="bs-props" class="small text-muted"><em>Select an object</em></div>
+    </div>
+  </div>
+</div>

@@ -4,6 +4,7 @@ import json
 
 import frappe
 from frappe import _
+from frappe.utils import cint
 from frappe.utils.safe_exec import safe_eval
 
 from .zpl.render import render_zpl
@@ -299,3 +300,215 @@ def _apply_bindings(bt, src: dict, bindings: dict) -> dict:
 		els[idx] = el
 	schema["elements"] = els
 	return schema
+
+
+@frappe.whitelist()
+def qbp_boot(doctype, name):
+	"""يرجّع doc + items + child_field + templates + default page size"""
+	doc = frappe.get_doc(doctype, name).as_dict()
+	# التعرّف على جدول الأصناف
+	child_field = None
+	for df in frappe.get_meta(doctype).get("fields", {}):
+		if df.fieldtype == "Table" and (
+			df.options in ("Sales Invoice Item", "Purchase Invoice Item", "Delivery Note Item")
+			or "Item" in (df.options or "")
+		):
+			child_field = df.fieldname
+			break
+	if not child_field:
+		# fallback: أول جدول
+		for df in frappe.get_meta(doctype).get("fields", {}):
+			if df.fieldtype == "Table":
+				child_field = df.fieldname
+				break
+
+	items = list(doc.get(child_field, [])) if child_field else []
+	# قوالب الباركود
+	templates = frappe.get_all("Barcode Template", fields=["name"], limit_page_length=200)
+
+	# يمكن لاحقاً قراءة الحجم الافتراضي من إعداداتك
+	width_mm = cint(frappe.db.get_single_value("Print Barcode Settings", "barcode_width_mm") or 50)
+	height_mm = cint(frappe.db.get_single_value("Print Barcode Settings", "barcode_height_mm") or 30)
+
+	return {
+		"doc": doc,
+		"items": items,
+		"child_field": child_field or "items",
+		"templates": templates,
+		"width_mm": width_mm,
+		"height_mm": height_mm,
+	}
+
+
+@frappe.whitelist()
+def qbp_templates():
+	return frappe.get_all("Barcode Template", fields=["name"], limit_page_length=200)
+
+
+@frappe.whitelist()
+def record_barcode_print(
+	parent_doctype, parent_name, child_field=None, child_row_names=None, copies=1, template_name=None
+):
+	import json
+
+	if isinstance(child_row_names, str):
+		try:
+			child_row_names = json.loads(child_row_names)
+		except Exception:
+			child_row_names = [child_row_names]
+	if not isinstance(child_row_names, (list, tuple)):
+		child_row_names = []
+
+	copies = int(copies or 1)
+
+	# DocType احترافي لتوثيق الطباعة (اختياري لكن موصى به)
+	for cdn in child_row_names or []:
+		frappe.get_doc(
+			{
+				"doctype": "Barcode Print Log",
+				"parent_doctype": parent_doctype,
+				"parent_name": parent_name,
+				"child_field": child_field,
+				"child_row_name": cdn,
+				"copies": copies,
+				"template_name": template_name,
+				"printed_by": frappe.session.user,
+			}
+		).insert(ignore_permissions=True)
+
+	# بثّ فوري لتحديث أي شاشة متابعة
+	from frappe.utils import now_datetime
+
+	frappe.publish_realtime(
+		event="barcode_printed",
+		message={
+			"parent_doctype": parent_doctype,
+			"parent_name": parent_name,
+			"child_field": child_field,
+			"rows": child_row_names or [],
+			"copies": copies,
+			"template_name": template_name,
+			"printed_on": now_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+		},
+		doctype=parent_doctype,
+		docname=parent_name,
+		after_commit=True,
+	)
+	return {"ok": True}
+
+
+@frappe.whitelist()
+def qbp_template_info(name):
+	"""إرجاع إعدادات القالب لواجهة الطباعة السريعة"""
+	doc = frappe.get_doc("Barcode Template", name)
+	return {
+		"name": doc.name,
+		"page_width_mm": doc.page_width_mm,
+		"page_height_mm": doc.page_height_mm,
+		"layout_json": doc.layout_json or "[]",
+	}
+
+
+from typing import Dict, List
+
+
+@frappe.whitelist()
+def qbp_rows_extra(
+	parent_doctype: str, parent_name: str, child_field: str, row_names_json: str
+) -> dict[str, dict]:
+	"""
+	ترجع بيانات إضافية لكل صف (بالمفتاح: اسم الصف).
+	- استدعِها من QBP بتمرير أسماء صفوف الجدول الفرعي.
+	- عدّل الاستعلام/الدمج حسب احتياجك.
+
+	return: { "<rowname>": { "brand": "...", "group": "...", "alt_barcode": "...", ... }, ... }
+	"""
+	import json
+
+	try:
+		row_names = json.loads(row_names_json) or []
+	except Exception:
+		row_names = []
+
+	if not row_names:
+		return {}
+
+	# احضر صفوف الجدول الفرعي (مثلاً Sales Invoice Item) لأخذ item_code وربطها بمعلومات إضافية
+	# نجيب بالداتا فريم المعتاد (frappe.db.sql) مع باراميترز لتأمين الاستعلام.
+	# NOTE: عدّل أسماء الدوال/الجداول حسب دكتورك.
+	parent_doc = frappe.get_doc(parent_doctype, parent_name)
+	child_dt = None
+	for df in parent_doc.meta.get("fields", []):
+		if df.fieldtype == "Table" and df.fieldname == child_field:
+			child_dt = df.options
+			break
+	if not child_dt:
+		return {}
+
+	# اقرأ الصفوف المطلوبة فقط
+	rows = frappe.db.sql(
+		f"""
+        SELECT name, item_code
+        FROM `tab{child_dt}`
+        WHERE parent = %(parent_name)s AND name IN %(names)s
+        """,
+		{"names": tuple(row_names), "parent_name": parent_name},
+		as_dict=True,
+	)
+
+	# حضّر set من الاكواد للـ JOIN التالي
+	item_codes = tuple({r["item_code"] for r in rows if r.get("item_code")})
+	extras: dict[str, dict] = {r["name"]: {} for r in rows}
+
+	if item_codes:
+		# أمثلة على حقول إضافية من Item (عدّلها كما تحب)
+		# - brand, item_group
+		# - رمز بديل من جدول Item Barcode (نأخذ أول Barcode مثلاً)
+		item_meta = frappe.db.sql(
+			"""
+            SELECT i.item_code, i.brand, i.item_group
+            FROM `tabItem` i
+            WHERE i.item_code IN %(ics)s
+            """,
+			{"ics": item_codes},
+			as_dict=True,
+		)
+		brand_by_code = {
+			d["item_code"]: {"brand": d.get("brand"), "item_group": d.get("item_group")} for d in item_meta
+		}
+
+		# خذ أول باركود لو موجود
+		item_barcodes = frappe.db.sql(
+			"""
+            SELECT ib.parent AS item_code, ib.barcode
+            FROM `tabItem Barcode` ib
+            WHERE ib.parent IN %(ics)s
+            ORDER BY ib.idx ASC
+            """,
+			{"ics": item_codes},
+			as_dict=True,
+		)
+		altbc_by_code = {}
+		for rec in item_barcodes:
+			# أول باركود فقط (غيّره لو تبغى تجمع الكل)
+			altbc_by_code.setdefault(rec["item_code"], rec["barcode"])
+
+		# املأ extras لكل صف
+		for r in rows:
+			ic = r.get("item_code")
+			if not ic:
+				continue
+			e = extras.get(r["name"], {})
+			base = brand_by_code.get(ic, {})
+			if base:
+				e.update(base)  # brand, item_group
+			alt = altbc_by_code.get(ic)
+			if alt:
+				e["alt_barcode"] = alt
+			extras[r["name"]] = e
+
+	# مثال إضافي: جلب batch_no الحالي لكل صف من جدول Batch (اختياري)
+	# (اتركه معلّقًا لو ما تحتاجه)
+	# ...
+
+	return extras

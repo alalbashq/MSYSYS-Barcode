@@ -1,0 +1,79 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-10-03 21:21:25.606806",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "parent_doctype",
+  "parent_name",
+  "child_field",
+  "child_row_name",
+  "copies",
+  "template_name",
+  "printed_by"
+ ],
+ "fields": [
+  {
+   "fieldname": "parent_doctype",
+   "fieldtype": "Data",
+   "label": "parent_doctype"
+  },
+  {
+   "fieldname": "parent_name",
+   "fieldtype": "Data",
+   "label": "parent_name"
+  },
+  {
+   "fieldname": "child_field",
+   "fieldtype": "Data",
+   "label": "child_field"
+  },
+  {
+   "fieldname": "child_row_name",
+   "fieldtype": "Data",
+   "label": "child_row_name"
+  },
+  {
+   "fieldname": "copies",
+   "fieldtype": "Data",
+   "label": "copies"
+  },
+  {
+   "fieldname": "template_name",
+   "fieldtype": "Data",
+   "label": "template_name"
+  },
+  {
+   "fieldname": "printed_by",
+   "fieldtype": "Data",
+   "label": "printed_by"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-10-03 21:23:36.321055",
+ "modified_by": "Administrator",
+ "module": "MYSYS Barcode",
+ "name": "Barcode Print Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

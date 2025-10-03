@@ -1,0 +1,71 @@
+#page-barcode-studio .page-head{
+    display: none;
+}
+/* Tabs + Groups */
+.bs-toolbar-tabs{ margin-top:8px; }
+.bs-toolbar-tabs .nav-tabs { border-bottom: 1px solid #eee; }
+.bs-groups { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.bs-group { background:#fff; border:1px solid #eee; border-radius:8px; padding:6px 8px; display:flex; align-items:center; gap:8px; }
+.bs-group .bs-group-title { font-weight:600; color:#555; margin-right:6px; white-space:nowrap; }
+.bs-group .bs-group-body { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+
+/* Layout baseline (من نسختك السابقة) */
+.bs-layout{display:grid;grid-template-columns: 260px 1fr 320px;grid-template-rows: 1fr;grid-gap:10px;height:calc(100vh - 170px)}
+.bs-side{background:#fff;border:1px solid #eee;border-radius:8px;padding:8px;display:flex;flex-direction:column;min-height:0}
+.bs-center{background:#fff;border:1px solid #eee;border-radius:8px;padding:8px;display:flex;flex-direction:column;min-height:0}
+.bb-stage{flex:1;overflow:auto;border:1px dashed #e9ecef;border-radius:8px;background:linear-gradient(#fafafa,#fafafa) padding-box;}
+
+/* Splitter & Preview pane */
+.bs-splitter{height:8px; cursor:ns-resize; background: repeating-linear-gradient(90deg,#e9ecef,#e9ecef 10px,#f7f7f7 10px,#f7f7f7 20px);}
+.bs-preview-pane{min-height:140px; max-height:50vh; overflow:auto; border:1px dashed #e9ecef; border-radius:8px; padding:8px; background:#fff;}
+
+/* Rulers & Status */
+.bb-ruler{position:sticky;z-index:2;background:#fafafa;border:1px solid #eee}
+.bb-ruler-x{top:0;height:2px}
+.bb-ruler-y{left:0;width:4px}
+.bs-status{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#888;margin-top:6px}
+
+/* Dark */
+.dark .bs-group,.dark .bs-side,.dark .bs-center{background:#101114;border-color:#2a2a2a}
+.dark .bb-stage{border-color:#2a2a2a}
+.dark .bs-preview-pane{background:#0e0f10;border-color:#2a2a2a}
+
+/* الحاويات الجانبية: اجعل body يتمدّد ويُظهر سكرول */
+.bs-side .body { flex: 1; min-height: 0; overflow: auto; }
+
+/* لو بعض الـthemes تمنع التمرير، أعطِ حد أقصى مرن للارتفاع */
+.bs-side .body { max-height: calc(100vh - 260px); }
+
+/* مجموعة حقول (Child) قابلة للطي */
+.bs-field-group { border:1px solid #eef0f2; border-radius:8px; }
+.bs-field-group + .bs-field-group { margin-top:8px; }
+.bs-field-group .fg-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:6px 8px; cursor:pointer; background:#fafafa;
+  border-bottom:1px solid #eef0f2; border-radius:8px 8px 0 0;
+}
+.bs-field-group .fg-title{ font-weight:600; color:#555; }
+.bs-field-group .fg-body{ padding:6px; display:none; }
+.bs-field-group.open .fg-body{ display:block; }
+
+/* زر الطي */
+.fg-toggle{ min-width:28px; }
+
+/* “الحقل” على سطرين: العنوان فوق، المسار تحت بخط صغير */
+.bs-field-chip{
+  display:inline-flex; flex-direction:column; align-items:flex-start;
+  gap:2px; padding:6px 8px; border-radius:10px; border:1px solid #e9ecef;
+  background:#f9fafb; cursor:grab; margin:4px;
+}
+.bs-field-chip .label{ font-weight:600; line-height:1.1; }
+.bs-field-chip .path{ color:#888; font-size:11px; line-height:1.1; }
+
+/* إبراز نتائج البحث */
+.bs-field-chip.match{ outline:2px solid #1677ff; background:#eef5ff; }
+
+/* Properties: تأكد من السّكرول */
+#bs-props { max-height: calc(100vh - 260px); overflow:auto; }
+#bs-props::-webkit-scrollbar, .bs-side .body::-webkit-scrollbar { width:8px; }
+#bs-props::-webkit-scrollbar-thumb, .bs-side .body::-webkit-scrollbar-thumb {
+  background:#d8dbe0; border-radius:6px;
+}

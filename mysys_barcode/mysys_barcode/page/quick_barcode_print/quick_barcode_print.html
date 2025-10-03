@@ -1,0 +1,145 @@
+<div class="qbp pro">
+  <!-- App Bar -->
+  <header class="qbp-appbar">
+    <div class="left">
+      <div class="title">
+        <i class="fa fa-receipt"></i>
+        <span>{{ doc.doctype }} — {{ doc.name }}</span>
+      </div>
+      <div class="meta">
+        <span>{{ __("Customer") }}:</span> {{ doc.customer || doc.supplier || doc.party_name || "-" }}
+        <i>•</i>
+        <span>{{ __("Date") }}:</span> {{ doc.posting_date || doc.transaction_date || doc.creation }}
+        <i>•</i>
+        <span>{{ __("Company") }}:</span> {{ doc.company }}
+      </div>
+    </div>
+    <div class="right">
+      <select id="qbp-template" class="form-control form-control-sm" title="Template">اختار قالب</select>
+      <button id="qbp-print" class="btn btn-primary btn-sm"><i class="fa fa-print"></i> {{ __("Print") }}</button>
+      <button id="qbp-open-studio" class="btn btn-outline-secondary btn-sm"><i class="fa fa-pen-ruler"></i> {{ __("Studio") }}</button>
+    </div>
+  </header>
+
+  <main class="qbp-main">
+    <!-- Left Panel -->
+    <aside class="qbp-panel">
+      <div class="acc">
+        <button class="acc-head" data-acc="doc">{{ __("Document") }}</button>
+        <div class="acc-body" id="acc-doc">
+          <div class="doc-grid">
+            <div>
+              <label>{{ __("Customer") }}</label>
+              <div class="v">{{ doc.customer || doc.supplier || doc.party_name || "-" }}</div>
+            </div>
+            <div>
+              <label>{{ __("Date") }}</label>
+              <div class="v">{{ doc.posting_date || doc.transaction_date || doc.creation }}</div>
+            </div>
+            <div>
+              <label>{{ __("Company") }}</label>
+              <div class="v">{{ doc.company }}</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="acc-head" data-acc="opts">{{ __("Print Options") }}</button>
+        <div class="acc-body" id="acc-opts">
+          <div class="form">
+            <div class="row">
+              <label>{{ __("Output") }}</label>
+              <select id="qbp-output" class="form-control form-control-sm">
+                <option value="html" selected>HTML (Vector)</option>
+                <option value="image">Image (HiDPI)</option>
+              </select>
+            </div>
+            <div class="row">
+              <label>{{ __("DPI") }}</label>
+              <select id="qbp-dpi" class="form-control form-control-sm">
+                <option value="300" selected>300</option>
+                <option value="600">600</option>
+                <option value="96">96</option>
+              </select>
+            </div>
+            <div class="row">
+              <label>{{ __("Copies") }}</label>
+              <input id="qbp-copies" type="number" min="1" value="1" class="form-control form-control-sm"/>
+            </div>
+            <div class="row">
+              <label>{{ __("Page (mm)") }}</label>
+              <div class="size">
+                <input id="qbp-w" type="number" class="form-control form-control-sm" value="{{ width_mm || 50 }}"/>
+                <span>×</span>
+                <input id="qbp-h" type="number" class="form-control form-control-sm" value="{{ height_mm || 30 }}"/>
+                <button id="qbp-apply-size" class="btn btn-light btn-sm">{{ __("Apply") }}</button>
+              </div>
+            </div>
+            <div class="hint">{{ __("Selecting a template will apply its size automatically.") }}</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Items + Preview Dock -->
+    <section class="qbp-work">
+      <div class="card items">
+        <div class="card-header">
+          <div class="h">{{ __("Items") }}</div>
+          <div class="tools">
+            <label class="mr-2"><input type="checkbox" id="qbp-select-all" checked/> {{ __("Select All") }}</label>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive qbp-table">
+            <table class="table table-sm table-hover mb-0">
+              <thead>
+                <tr>
+                  <th style="width:40px"></th>
+                  <th>{{ __("Item") }}</th>
+                  <th style="width:80px">{{ __("Qty") }}</th>
+                  <th style="min-width:360px">{{ __("Barcodes") }}</th>
+                  <th style="width:160px">{{ __("Label Copies") }}</th>
+                </tr>
+              </thead>
+              <tbody id="qbp-items-body">
+                {% for (var i=0; i<items.length; i++) { var r=items[i]; %}
+                <tr data-cdn="{{ r.name }}">
+                  <td><input type="checkbox" class="qbp-include" checked/></td>
+                  <td>
+                    <div class="item-name">{{ r.item_name || r.item_code }}</div>
+                    <div class="muted">{{ r.item_code }}</div>
+                  </td>
+                  <td>{{ r.qty || r.stock_qty || 1 }}</td>
+                  <td>
+                    <div class="pills" data-cdn="{{ r.name }}"></div>
+                    <div class="bc-row">
+                      <select class="form-control form-control-sm bc-type" data-cdn="{{ r.name }}">
+                        <option>CODE128</option><option>EAN13</option><option>UPC</option><option>CODE39</option><option>QR</option>
+                      </select>
+                      <input class="form-control form-control-sm bc-value" data-cdn="{{ r.name }}" placeholder="{{ __("value or field path e.g. barcode or batch_no") }}"/>
+                      <button class="btn btn-sm btn-light add-bc" data-cdn="{{ r.name }}">{{ __("Add") }}</button>
+                    </div>
+                  </td>
+                  <td><input type="number" class="form-control form-control-sm row-copies" min="1" value="{{ r.qty || 1 }}" data-cdn="{{ r.name }}"/></td>
+                </tr>
+                {% } %}
+                {% if (!items || items.length===0) { %}
+                <tr><td colspan="5" class="text-center text-muted p-4">{{ __("No items") }}</td></tr>
+                {% } %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preview Dock (Resizable) -->
+      <div class="qbp-dock" id="qbp-dock">
+        <div class="grip" id="qbp-grip"></div>
+        <div class="dock-body">
+          <div class="dock-head">{{ __("Preview") }}</div>
+          <div id="qbp-preview" class="preview"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
