@@ -5,7 +5,7 @@
     #page-barcode-studio .container-xl, .container-lg, .container-md, .container-sm, .container {
         max-width: 1290px;
     }
-}
+} 
 /* Tabs + Groups */
 .bs-toolbar-tabs{ margin-top:8px; }
 .bs-toolbar-tabs .nav-tabs { border-bottom: 1px solid #eee; }
