@@ -1,6 +1,11 @@
 #page-quick-barcode-print .page-head{
     display: none;
 }
+ @media (min-width: 1200px) {
+    #page-quick-barcode-print .container-xl, .container-lg, .container-md, .container-sm, .container {
+        max-width: 1290px;
+    }
+}
 /* Layout */
 .qbp.pro{--bg:#fff;--muted:#6b7280;--line:#e5e7eb;--soft:#f8fafc;--shadow:0 1px 2px rgba(0,0,0,.06); padding:12px}
 .qbp-appbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;padding:10px 12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
@@ -41,3 +46,4 @@
 .qbp-dock .dock-head{padding:8px 10px;border-bottom:1px solid var(--line);background:var(--soft);font-weight:600}
 .qbp-dock .preview{padding:10px;overflow:auto}
 .qbp-dock .preview img{max-width:100%;border:1px solid var(--line)}
+
