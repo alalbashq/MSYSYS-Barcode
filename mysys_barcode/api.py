@@ -4,7 +4,7 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, cstr
 from frappe.utils.safe_exec import safe_eval
 
 from .zpl.render import render_zpl
@@ -167,6 +167,16 @@ def _render_html(bt, ctx: dict, copies: int = 1) -> str:
 from frappe.model.meta import get_meta
 
 
+STANDARD_BARCODE_FIELDS = {
+	"name": {
+		"label": "Name",
+		"fieldname": "name",
+		"fieldtype": "Data",
+		"options": "",
+	}
+}
+
+
 @frappe.whitelist()
 def get_meta_fields(doctype: str, force: bool = False) -> list[dict]:
 	"""أرجع قائمة مختصرة من الحقول القابلة للربط (binding) من الـ DocType."""
@@ -274,6 +284,375 @@ def get_doc_field_catalog(doctype: str) -> dict:
 		"root_fields": root_fields,
 		"child_tables": child_tables,
 	}
+
+
+@frappe.whitelist()
+def get_barcode_doctype_config(target_doctype: str, barcode_doctype: str | None = None) -> dict:
+	"""Return the active Barcode DocType configuration for a target DocType."""
+	config = _get_barcode_doctype_doc(target_doctype, barcode_doctype)
+	return _serialize_barcode_doctype_config(config)
+
+
+@frappe.whitelist()
+def prepare_barcode_route_options(
+	doctype: str,
+	name: str,
+	template: str | None = None,
+	barcode_doctype: str | None = None,
+	child_table_field: str | None = None,
+	child_row_name: str | None = None,
+) -> dict:
+	"""Build flat route options for Barcode Studio.
+
+	Barcode Studio renders only with render_data[binding_key]. This function is
+	the boundary that may read the ERPNext document and child-table rows.
+	"""
+	if not doctype or not frappe.db.exists("DocType", doctype):
+		frappe.throw(_("DocType {0} does not exist.").format(frappe.bold(doctype)))
+
+	doc = frappe.get_doc(doctype, name)
+	if not frappe.has_permission(doctype, "read", doc=doc):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	return _build_barcode_route_options(
+		doc,
+		doctype=doctype,
+		name=name,
+		template=template,
+		barcode_doctype=barcode_doctype,
+		child_table_field=child_table_field,
+		child_row_name=child_row_name,
+	)
+
+
+def _build_barcode_route_options(
+	doc,
+	doctype: str,
+	name: str,
+	template: str | None = None,
+	barcode_doctype: str | None = None,
+	child_table_field: str | None = None,
+	child_row_name: str | None = None,
+) -> dict:
+	config = _get_barcode_doctype_doc(doctype, barcode_doctype)
+	fields = _get_allowed_barcode_fields(config, include_hidden=False)
+	render_data = {}
+
+	for row in fields:
+		key = row["binding_key"]
+		value = None
+		if row["source_level"] == "Child Table":
+			value = _get_child_value(
+				doc,
+				row["child_table_field"],
+				row["fieldname"],
+				child_row_name if row["child_table_field"] == child_table_field else None,
+			)
+		else:
+			value = _get_document_value(doc, row["fieldname"])
+		render_data[key] = _format_route_value(value)
+
+	return {
+		"doctype": doctype,
+		"name": name,
+		"template": template,
+		"barcode_doctype": config.name,
+		"render_data": render_data,
+	}
+
+
+@frappe.whitelist()
+def prepare_quick_barcode_route_options(
+	parent_doctype: str,
+	parent_name: str,
+	child_field: str,
+	child_row_name: str,
+	template: str | None = None,
+	target_doctype: str | None = None,
+	barcode_doctype: str | None = None,
+) -> dict:
+	"""Build route options for a single Quick Barcode Print child row.
+
+	If the selected template was designed for Item, values are still taken from
+	the invoice row first, then from the Item document. This lets a reusable Item
+	template print invoice-specific values such as row rate and qty.
+	"""
+	if not parent_doctype or not frappe.db.exists("DocType", parent_doctype):
+		frappe.throw(_("DocType {0} does not exist.").format(frappe.bold(parent_doctype)))
+
+	parent_doc = frappe.get_doc(parent_doctype, parent_name)
+	if not frappe.has_permission(parent_doctype, "read", doc=parent_doc):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	child_row = _get_child_row(parent_doc, child_field, child_row_name)
+	template_source_doctype = _get_template_source_doctype(template)
+	resolved_target = target_doctype or template_source_doctype or ("Item" if child_row.get("item_code") else parent_doctype)
+
+	if resolved_target == parent_doctype:
+		out = _build_barcode_route_options(
+			parent_doc,
+			doctype=parent_doctype,
+			name=parent_name,
+			template=template,
+			barcode_doctype=barcode_doctype,
+			child_table_field=child_field,
+			child_row_name=child_row_name,
+		)
+	else:
+		out = _build_route_options_from_child_row(
+			child_row=child_row,
+			target_doctype=resolved_target,
+			template=template,
+			barcode_doctype=barcode_doctype,
+		)
+
+	out.update(
+		{
+			"parent_doctype": parent_doctype,
+			"parent_name": parent_name,
+			"child_field": child_field,
+			"child_row_name": child_row_name,
+		}
+	)
+	return out
+
+
+def _get_barcode_doctype_doc(target_doctype: str, barcode_doctype: str | None = None):
+	if not target_doctype:
+		frappe.throw(_("Target DocType is required."))
+
+	if barcode_doctype:
+		config = frappe.get_doc("Barcode DocType", barcode_doctype)
+		if config.target_doctype != target_doctype:
+			frappe.throw(
+				_("Barcode DocType {0} is configured for {1}, not {2}.").format(
+					frappe.bold(barcode_doctype), frappe.bold(config.target_doctype), frappe.bold(target_doctype)
+				)
+			)
+		if not config.enabled:
+			frappe.throw(_("Barcode DocType {0} is disabled.").format(frappe.bold(barcode_doctype)))
+		return config
+
+	matches = frappe.get_all(
+		"Barcode DocType",
+		filters={"target_doctype": target_doctype, "enabled": 1},
+		fields=["name"],
+		order_by="modified desc",
+		limit_page_length=1,
+	)
+	if not matches:
+		frappe.throw(
+			_("No Barcode DocType configuration found for this DocType. Please create one first."),
+			frappe.DoesNotExistError,
+		)
+	return frappe.get_doc("Barcode DocType", matches[0].name)
+
+
+def _serialize_barcode_doctype_config(config) -> dict:
+	return {
+		"name": config.name,
+		"title": config.title,
+		"target_doctype": config.target_doctype,
+		"fields": _get_allowed_barcode_fields(config, include_hidden=False),
+	}
+
+
+def _get_allowed_barcode_fields(config, include_hidden: bool = False) -> list[dict]:
+	fields = []
+	for row in sorted(config.get("fields") or [], key=lambda item: item.idx or 0):
+		if row.hidden and not include_hidden:
+			continue
+		binding_key = row.binding_key or _derive_binding_key(row)
+		if not binding_key:
+			continue
+		fields.append(
+			{
+				"label": row.label or row.fieldname or binding_key,
+				"fieldname": row.fieldname,
+				"binding_key": binding_key,
+				"source_level": row.source_level or "Document",
+				"child_table_field": row.child_table_field or None,
+				"child_doctype": row.child_doctype or None,
+				"fieldtype": row.fieldtype or "Data",
+				"options": row.options or "",
+				"sample_value": row.sample_value or "",
+				"idx": row.idx,
+			}
+		)
+	return fields
+
+
+def _derive_binding_key(row) -> str:
+	if (row.source_level or "Document") == "Child Table":
+		if row.child_table_field and row.fieldname:
+			return f"{row.child_table_field}_{row.fieldname}"
+		return ""
+	return row.fieldname or ""
+
+
+def _get_document_value(doc, fieldname: str):
+	if fieldname == "name":
+		return doc.name
+	return doc.get(fieldname)
+
+
+def _get_first_child_value(doc, child_table_field: str | None, fieldname: str):
+	return _get_child_value(doc, child_table_field, fieldname)
+
+
+def _get_child_value(doc, child_table_field: str | None, fieldname: str, child_row_name: str | None = None):
+	if not child_table_field:
+		return None
+	rows = doc.get(child_table_field) or []
+	if not rows:
+		return None
+	first = _find_child_row(rows, child_row_name) if child_row_name else rows[0]
+	if not first:
+		return None
+	if fieldname == "name":
+		return first.name
+	return first.get(fieldname)
+
+
+def _find_child_row(rows, child_row_name: str | None):
+	if not child_row_name:
+		return None
+	for row in rows or []:
+		if row.name == child_row_name:
+			return row
+	return None
+
+
+def _get_child_row(parent_doc, child_field: str | None, child_row_name: str | None):
+	if not child_field:
+		frappe.throw(_("Child Table is required."))
+	rows = parent_doc.get(child_field) or []
+	row = _find_child_row(rows, child_row_name)
+	if not row:
+		frappe.throw(
+			_("Row {0} was not found in {1}.").format(frappe.bold(child_row_name or ""), frappe.bold(child_field))
+		)
+	return row
+
+
+def _get_template_source_doctype(template: str | None) -> str | None:
+	if not template:
+		return None
+	if not frappe.db.exists("Barcode Template", template):
+		return None
+	return frappe.db.get_value("Barcode Template", template, "source_doctype") or None
+
+
+def _build_route_options_from_child_row(
+	child_row,
+	target_doctype: str,
+	template: str | None = None,
+	barcode_doctype: str | None = None,
+) -> dict:
+	source_doc = None
+	source_name = None
+
+	if target_doctype == child_row.doctype:
+		source_doc = child_row
+		source_name = child_row.name
+	elif target_doctype == "Item" and child_row.get("item_code"):
+		source_name = child_row.get("item_code")
+		if frappe.db.exists("Item", source_name):
+			source_doc = frappe.get_doc("Item", source_name)
+			if not frappe.has_permission("Item", "read", doc=source_doc):
+				frappe.throw(_("Not permitted"), frappe.PermissionError)
+	else:
+		frappe.throw(
+			_("Cannot prepare barcode data for {0} from row {1}.").format(
+				frappe.bold(target_doctype), frappe.bold(child_row.name)
+			)
+		)
+
+	config = _get_barcode_doctype_doc(target_doctype, barcode_doctype)
+	fields = _get_allowed_barcode_fields(config, include_hidden=False)
+	render_data = {}
+
+	for row in fields:
+		key = row["binding_key"]
+		if row["source_level"] == "Child Table":
+			value = _get_qbp_child_value(child_row, source_doc, row)
+		else:
+			value = _get_qbp_document_value(child_row, source_doc, row["fieldname"])
+
+		if not value and _is_barcode_binding(row):
+			value = _get_row_barcode_value(child_row, source_doc)
+
+		render_data[key] = _format_route_value(value)
+
+	return {
+		"doctype": target_doctype,
+		"name": source_name or child_row.name,
+		"template": template,
+		"barcode_doctype": config.name,
+		"render_data": render_data,
+	}
+
+
+def _get_qbp_document_value(child_row, source_doc, fieldname: str):
+	if fieldname == "name":
+		return source_doc.name if source_doc else child_row.name
+
+	if fieldname == "standard_rate":
+		row_rate = child_row.get("rate")
+		if row_rate not in (None, ""):
+			return row_rate
+
+	row_value = child_row.get(fieldname)
+	if row_value not in (None, ""):
+		return row_value
+
+	if source_doc:
+		return source_doc.get(fieldname)
+	return None
+
+
+def _get_qbp_child_value(child_row, source_doc, config_row: dict):
+	if _is_barcode_binding(config_row):
+		value = _get_row_barcode_value(child_row, source_doc, fallback_to_item_code=False)
+		if value:
+			return value
+
+	if source_doc:
+		return _get_first_child_value(source_doc, config_row["child_table_field"], config_row["fieldname"])
+	return None
+
+
+def _is_barcode_binding(config_row: dict) -> bool:
+	fieldname = cstr(config_row.get("fieldname")).lower()
+	binding_key = cstr(config_row.get("binding_key")).lower()
+	label = cstr(config_row.get("label")).lower()
+	return (
+		fieldname == "barcode"
+		or label == "barcode"
+		or binding_key == "barcode"
+		or binding_key.endswith("_barcode")
+	)
+
+
+def _get_row_barcode_value(child_row, source_doc=None, fallback_to_item_code: bool = True):
+	value = child_row.get("barcode")
+	if value:
+		return value
+
+	if source_doc:
+		for row in source_doc.get("barcodes") or []:
+			if row.get("barcode"):
+				return row.get("barcode")
+
+	if fallback_to_item_code:
+		return child_row.get("item_code") or (source_doc.name if source_doc else None)
+	return None
+
+
+def _format_route_value(value) -> str:
+	if value is None:
+		return ""
+	return cstr(value)
 
 
 @frappe.whitelist()
@@ -482,6 +861,7 @@ def qbp_template_info(name):
 	doc = frappe.get_doc("Barcode Template", name)
 	return {
 		"name": doc.name,
+		"source_doctype": doc.source_doctype,
 		"page_width_mm": doc.page_width_mm,
 		"page_height_mm": doc.page_height_mm,
 		"layout_json": doc.layout_json or "[]",

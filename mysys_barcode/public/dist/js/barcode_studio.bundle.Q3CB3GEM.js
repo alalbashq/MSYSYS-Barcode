@@ -55,24 +55,6 @@
     boxWidth: "box_width_mm",
     boxHeight: "box_height_mm"
   };
-  var BARCODE_STUDIO_FIELD_TYPES = /* @__PURE__ */ new Set([
-    "Data",
-    "Small Text",
-    "Long Text",
-    "Select",
-    "Link",
-    "Dynamic Link",
-    "Int",
-    "Float",
-    "Currency",
-    "Percent",
-    "Date",
-    "Datetime",
-    "Time",
-    "Read Only",
-    "Barcode",
-    "Text Editor"
-  ]);
   function safeJsonParse(raw, fallback) {
     try {
       return raw ? JSON.parse(raw) : fallback;
@@ -108,15 +90,6 @@
       docname: route[2] || "",
       templateName: route[3] || null
     };
-  }
-  function normalizeCtx(ctx) {
-    if (!ctx || typeof ctx !== "object")
-      return null;
-    if (ctx.doctype || ctx.name || ctx.__child_field)
-      return ctx;
-    if (ctx.doc && typeof ctx.doc === "object")
-      return ctx.doc;
-    return ctx;
   }
 
   // ../mysys_barcode/mysys_barcode/public/js/barcode_studio/state_store.js
@@ -174,12 +147,17 @@
       this.gridVisible = false;
       this._suspendPreview = false;
       this._previewTicket = 0;
+      this._dropTargets = [];
       this.previewDebounced = ((_a2 = frappe.utils) == null ? void 0 : _a2.debounce(() => {
         void this.preview();
       }, 180)) || (() => void this.preview());
       this._boundKeydown = this._handleKeydown.bind(this);
       this._boundWheel = this._handleWheel.bind(this);
-      this._boundDragOver = (ev) => ev.preventDefault();
+      this._boundDragOver = (ev) => {
+        ev.preventDefault();
+        if (ev.dataTransfer)
+          ev.dataTransfer.dropEffect = "copy";
+      };
       this._boundDrop = this._handleDrop.bind(this);
     }
     _pxToMm(value, digits = 3) {
@@ -243,9 +221,13 @@
       this.setZoom(1, { persist: false });
     }
     destroy() {
+      for (const target of this._dropTargets || []) {
+        target.removeEventListener("dragenter", this._boundDragOver);
+        target.removeEventListener("dragover", this._boundDragOver);
+        target.removeEventListener("drop", this._boundDrop);
+      }
+      this._dropTargets = [];
       if (this.canvasEl) {
-        this.canvasEl.removeEventListener("dragover", this._boundDragOver);
-        this.canvasEl.removeEventListener("drop", this._boundDrop);
         this.canvasEl.removeEventListener("wheel", this._boundWheel);
       }
       document.removeEventListener("keydown", this._boundKeydown);
@@ -299,10 +281,24 @@
         if (!this._suspendPreview)
           this.previewDebounced();
       });
-      this.canvasEl.addEventListener("dragover", this._boundDragOver);
-      this.canvasEl.addEventListener("drop", this._boundDrop);
+      this._bindDropTargets();
       this.canvasEl.addEventListener("wheel", this._boundWheel, { passive: false });
       document.addEventListener("keydown", this._boundKeydown);
+    }
+    _bindDropTargets() {
+      var _a2, _b;
+      const targets = [
+        this.canvasEl,
+        (_a2 = this.fabricCanvas) == null ? void 0 : _a2.upperCanvasEl,
+        (_b = this.fabricCanvas) == null ? void 0 : _b.wrapperEl,
+        document.getElementById("bs-canvas-wrap")
+      ].filter(Boolean);
+      this._dropTargets = [...new Set(targets)];
+      for (const target of this._dropTargets) {
+        target.addEventListener("dragenter", this._boundDragOver);
+        target.addEventListener("dragover", this._boundDragOver);
+        target.addEventListener("drop", this._boundDrop);
+      }
     }
     _focusCanvas() {
       var _a2, _b, _c;
@@ -312,19 +308,23 @@
       ev.preventDefault();
       if (!this.fabricCanvas)
         return;
-      const payload = safeJsonParse(ev.dataTransfer.getData("text/plain"), {});
-      const pointer = this.fabricCanvas.getPointer(ev);
+      const raw = ev.dataTransfer.getData("application/x-mysys-barcode-field") || ev.dataTransfer.getData("text/plain");
+      const payload = safeJsonParse(raw, {});
+      if (!payload || !Object.keys(payload).length)
+        return;
+      const pointer = this._getDropPointer(ev);
       this._chooseAddAs(payload, pointer.x, pointer.y);
     }
+    _getDropPointer(ev) {
+      const pointer = this.fabricCanvas.getPointer(ev);
+      return {
+        x: clamp(pointer.x, 0, Math.max(0, this.fabricCanvas.getWidth() - 20)),
+        y: clamp(pointer.y, 0, Math.max(0, this.fabricCanvas.getHeight() - 20))
+      };
+    }
     _chooseAddAs(payload, x, y) {
-      const kind = String((payload == null ? void 0 : payload.kind) || ((payload == null ? void 0 : payload.fieldtype) === "Barcode" ? "barcode" : "text")).toLowerCase();
-      const label = (payload == null ? void 0 : payload.displayLabel) || (payload == null ? void 0 : payload.label) || (payload == null ? void 0 : payload.fieldLabel) || (payload == null ? void 0 : payload.fieldname) || (payload == null ? void 0 : payload.path) || "Text";
-      const bindPath = (payload == null ? void 0 : payload.path) || (payload == null ? void 0 : payload.fieldname) || "";
-      if (kind === "barcode") {
-        this.addBarcodeAt(x, y, (payload == null ? void 0 : payload.baseValue) || (payload == null ? void 0 : payload.value) || label || bindPath || "123456789012", bindPath);
-        return;
-      }
-      this.addTextAt(x, y, label, bindPath);
+      const kind = this._resolveFieldKind(payload, this._normalizeFieldPayload(payload));
+      this.addFieldElement(payload, { x, y, kind });
     }
     _handleKeydown(ev) {
       var _a2, _b, _c, _d, _e;
@@ -386,6 +386,91 @@
         obj.boxHeight = obj.getScaledHeight();
       }
     }
+    _normalizeFieldPayload(payload = {}, fallbackLabel = "", fallbackBinding = "") {
+      const source = typeof payload === "string" ? { binding_key: payload } : payload || {};
+      const bindingKey = source.binding_key || source.bindField || source.path || source.fieldname || fallbackBinding || "";
+      const childTable = source.child_table_field || source.parent_fieldname || null;
+      return {
+        label: source.displayLabel || source.label || source.fieldLabel || fallbackLabel || source.fieldname || bindingKey || "",
+        fieldname: source.fieldname || bindingKey || "",
+        binding_key: bindingKey,
+        source_level: source.source_level || source.scope || (childTable ? "Child Table" : "Document"),
+        child_table_field: childTable,
+        child_doctype: source.child_doctype || null,
+        fieldtype: source.fieldtype || "Data",
+        sample_value: source.sample_value || source.sampleValue || ""
+      };
+    }
+    _applyElementMetadata(obj, metadata) {
+      const clean = this._normalizeFieldPayload(metadata);
+      obj.set({
+        label: clean.label || "",
+        fieldname: clean.fieldname || "",
+        binding_key: clean.binding_key || "",
+        bindField: clean.binding_key || "",
+        source_level: clean.source_level || "Document",
+        child_table_field: clean.child_table_field || "",
+        child_doctype: clean.child_doctype || "",
+        fieldtype: clean.fieldtype || "",
+        sample_value: clean.sample_value || ""
+      });
+    }
+    _elementMetadataFromObject(obj) {
+      return {
+        label: obj.label || "",
+        fieldname: obj.fieldname || "",
+        binding_key: obj.binding_key || obj.bindField || "",
+        source_level: obj.source_level || "Document",
+        child_table_field: obj.child_table_field || "",
+        child_doctype: obj.child_doctype || "",
+        fieldtype: obj.fieldtype || "",
+        sample_value: obj.sample_value || ""
+      };
+    }
+    _elementMetadataFromItem(item) {
+      return this._normalizeFieldPayload({
+        label: item.label || item.baseText || item.text || item.baseBarcodeValue || item.barcodeValue || "",
+        fieldname: item.fieldname || item.bindField || "",
+        binding_key: item.binding_key || item.bindField || item.fieldname || "",
+        source_level: item.source_level || "Document",
+        child_table_field: item.child_table_field || "",
+        child_doctype: item.child_doctype || "",
+        fieldtype: item.fieldtype || "",
+        sample_value: item.sample_value || ""
+      });
+    }
+    _designText(metadata, fallback = "Text") {
+      return metadata.label || metadata.fieldname || metadata.binding_key || fallback;
+    }
+    _isBarcodeMetadata(metadata = {}) {
+      const fieldtype = String(metadata.fieldtype || "").toLowerCase();
+      const fieldname = String(metadata.fieldname || "").toLowerCase();
+      const bindingKey = String(metadata.binding_key || metadata.bindField || metadata.path || "").toLowerCase();
+      const label = String(metadata.label || metadata.displayLabel || "").toLowerCase();
+      const bindingParts = bindingKey.split("_").filter(Boolean);
+      return fieldtype === "barcode" || fieldname === "barcode" || label === "barcode" || bindingParts[bindingParts.length - 1] === "barcode";
+    }
+    _resolveFieldKind(payload = {}, metadata = {}) {
+      const explicit = String((payload == null ? void 0 : payload.kind) || "").toLowerCase();
+      if (explicit === "barcode" || explicit === "text")
+        return explicit;
+      return this._isBarcodeMetadata(metadata) ? "barcode" : "text";
+    }
+    addFieldElement(payload, options = {}) {
+      var _a2, _b;
+      const metadata = this._normalizeFieldPayload(payload);
+      const kind = this._resolveFieldKind(__spreadProps(__spreadValues({}, payload), { kind: options.kind || (payload == null ? void 0 : payload.kind) }), metadata);
+      const x = (_a2 = options.x) != null ? _a2 : 20;
+      const y = (_b = options.y) != null ? _b : 20;
+      if (kind === "barcode") {
+        const renderData = this.page.getRenderData();
+        const renderedValue = metadata.binding_key ? renderData == null ? void 0 : renderData[metadata.binding_key] : null;
+        const value = renderedValue || metadata.sample_value || metadata.binding_key || metadata.label || "123456789012";
+        this.addBarcodeAt(x, y, value, metadata);
+        return;
+      }
+      this.addTextAt(x, y, this._designText(metadata), metadata);
+    }
     _cloneFabricObject(obj) {
       return new Promise((resolve) => {
         if (!(obj == null ? void 0 : obj.clone)) {
@@ -396,6 +481,14 @@
           "baseText",
           "baseBarcodeValue",
           "bindField",
+          "binding_key",
+          "label",
+          "fieldname",
+          "source_level",
+          "child_table_field",
+          "child_doctype",
+          "fieldtype",
+          "sample_value",
           "customType",
           "barcodeValue",
           "format",
@@ -428,27 +521,25 @@
         renderOnAddRemove: false,
         selection: false
       });
-      const data = this.page.resolveDoc();
       for (const source of this.fabricCanvas.getObjects()) {
         const clone = await this._cloneFabricObject(source);
         if (!clone)
           continue;
         if ((_a2 = clone.isType) == null ? void 0 : _a2.call(clone, "textbox")) {
           const baseText = (_c = (_b = source.baseText) != null ? _b : source.text) != null ? _c : "";
-          const resolved = source.bindField ? this._getByPath(data, source.bindField) : void 0;
-          const nextText = resolved === void 0 || resolved === null ? baseText : this._toStr(resolved);
+          const nextText = this.page.getElementDisplayValue(source, "preview");
           clone.set("text", nextText);
           clone.baseText = baseText;
         } else if (source.customType === "barcode") {
           const baseValue = (_e = (_d = source.baseBarcodeValue) != null ? _d : source.barcodeValue) != null ? _e : "";
-          const resolved = source.bindField ? this._getByPath(data, source.bindField) : void 0;
-          const nextValue = resolved === void 0 || resolved === null ? baseValue : this._toStr(resolved);
+          const nextValue = this.page.getElementDisplayValue(source, "preview");
           const boxWidth = source.boxWidth || source.getScaledWidth() || source.width || 0;
           const boxHeight = source.boxHeight || source.getScaledHeight() || source.height || 0;
           clone.set({
             barcodeValue: nextValue,
             baseBarcodeValue: baseValue,
-            bindField: source.bindField || "",
+            bindField: source.binding_key || source.bindField || "",
+            binding_key: source.binding_key || source.bindField || "",
             customType: "barcode",
             format: source.format || "CODE128",
             barWidth: source.barWidth || 2,
@@ -494,24 +585,6 @@
       } catch (e) {
         return `${value}`;
       }
-    }
-    _getByPath(obj, path) {
-      if (!obj || !path)
-        return void 0;
-      const normalizedPath = String(path).replace(/\[\]/g, "[0]");
-      const segments = normalizedPath.replace(/\[(\d*)\]/g, ".$1").split(".").filter(Boolean);
-      let current = obj;
-      for (const segment of segments) {
-        if (Array.isArray(current)) {
-          const idx = segment === "" ? 0 : Number.parseInt(segment, 10);
-          current = current == null ? void 0 : current[idx];
-        } else {
-          current = current == null ? void 0 : current[segment];
-        }
-        if (current === void 0 || current === null)
-          break;
-      }
-      return current;
     }
     _barcodeDataURL(value, format, width, height, displayValue, margins = { mt: 0, mr: 0, mb: 0, ml: 0 }) {
       const tmp = document.createElement("canvas");
@@ -654,9 +727,10 @@
       if (type === "barcode")
         this.addBarcodeAt(20, 20, "123456789012", "");
     }
-    addTextAt(x, y, text, bindPath = "") {
+    addTextAt(x, y, text, metadataInput = "") {
       if (!this.fabricCanvas)
         return;
+      const metadata = this._normalizeFieldPayload(metadataInput, text, typeof metadataInput === "string" ? metadataInput : "");
       const baseText = text || "Text";
       const obj = new fabric.Textbox(baseText, {
         left: x,
@@ -665,17 +739,18 @@
         padding: 2,
         textAlign: "left",
         customType: "text",
-        bindField: bindPath || "",
         baseText
       });
+      this._applyElementMetadata(obj, metadata);
       this.fabricCanvas.add(obj).setActiveObject(obj);
       this.renderProps(obj);
       if (!this._suspendPreview)
         this.previewDebounced();
     }
-    addBarcodeAt(x, y, value, bindPath = "") {
+    addBarcodeAt(x, y, value, metadataInput = "") {
       if (!this.fabricCanvas)
         return;
+      const metadata = this._normalizeFieldPayload(metadataInput, value, typeof metadataInput === "string" ? metadataInput : "");
       const baseValue = value || "123456789012";
       const format = "CODE128";
       const barWidth = 2;
@@ -702,9 +777,9 @@
           marginTop: 0,
           marginRight: 0,
           marginBottom: 0,
-          marginLeft: 0,
-          bindField: bindPath || ""
+          marginLeft: 0
         });
+        this._applyElementMetadata(img, metadata);
         img.boxWidth = img.getScaledWidth();
         img.boxHeight = img.getScaledHeight();
         img._barcodeSignature = this._barcodeSignature(img);
@@ -728,6 +803,8 @@
       var _a2, _b;
       const obj = (_a2 = this.fabricCanvas) == null ? void 0 : _a2.getActiveObject();
       if (!obj)
+        return;
+      if (obj.binding_key)
         return;
       if ((_b = obj.isType) == null ? void 0 : _b.call(obj, "textbox")) {
         obj.baseText = "";
@@ -771,7 +848,7 @@
         this.previewDebounced();
     }
     async loadTemplate(doc) {
-      var _a2, _b, _c, _d;
+      var _a2, _b, _c, _d, _e, _f, _g, _h, _i;
       if (!this.fabricCanvas || !doc)
         return;
       this._suspendPreview = true;
@@ -784,8 +861,10 @@
       const layout = safeJsonParse(doc.layout_json || "[]", []);
       const items = Array.isArray(layout) ? layout : [];
       for (const item of items) {
-        if (item.type === "textbox") {
-          const baseText = (_b = (_a2 = item.baseText) != null ? _a2 : item.text) != null ? _b : "";
+        const metadata = this._elementMetadataFromItem(item);
+        if (item.type === "textbox" && !this._isBarcodeMetadata(metadata)) {
+          const hasBinding = !!metadata.binding_key;
+          const baseText = hasBinding ? this._designText(metadata, (_b = (_a2 = item.baseText) != null ? _a2 : item.text) != null ? _b : "") : (_d = (_c = item.baseText) != null ? _c : item.text) != null ? _d : "";
           const obj = new fabric.Textbox(baseText, Object.assign({}, item, {
             left: this._layoutValuePx(item, "left", 0),
             top: this._layoutValuePx(item, "top", 0),
@@ -793,12 +872,14 @@
             fontSize: this._layoutValuePx(item, "fontSize", 12),
             text: baseText,
             customType: "text",
-            bindField: item.bindField || "",
             baseText
           }));
+          this._applyElementMetadata(obj, metadata);
           this.fabricCanvas.add(obj);
-        } else if (item.type === "image" && (item.barcodeValue || item.src || item.customType === "barcode")) {
-          const baseValue = (_d = (_c = item.baseBarcodeValue) != null ? _c : item.barcodeValue) != null ? _d : "";
+        } else if (this._isBarcodeMetadata(metadata) || item.type === "image" && (item.barcodeValue || item.src || item.customType === "barcode")) {
+          const hasBinding = !!metadata.binding_key;
+          const renderedValue = hasBinding ? (_e = this.page.getRenderData()) == null ? void 0 : _e[metadata.binding_key] : "";
+          const baseValue = hasBinding ? renderedValue || metadata.sample_value || item.baseBarcodeValue || item.barcodeValue || item.baseText || item.text || metadata.label || metadata.binding_key || "123456789012" : (_i = (_h = (_g = (_f = item.baseBarcodeValue) != null ? _f : item.barcodeValue) != null ? _g : item.baseText) != null ? _h : item.text) != null ? _i : "";
           const url = this._barcodeDataURL(
             baseValue || " ",
             item.format || "CODE128",
@@ -818,8 +899,8 @@
           img.set(Object.assign({}, item, {
             left: this._layoutValuePx(item, "left", item.left || 0),
             top: this._layoutValuePx(item, "top", item.top || 0),
+            type: "image",
             customType: "barcode",
-            bindField: item.bindField || "",
             barcodeValue: baseValue,
             baseBarcodeValue: baseValue,
             barWidth: this._layoutValuePx(item, "barWidth", 2),
@@ -829,6 +910,7 @@
             marginBottom: this._layoutValuePx(item, "marginBottom", 0),
             marginLeft: this._layoutValuePx(item, "marginLeft", 0)
           }));
+          this._applyElementMetadata(img, metadata);
           img.boxWidth = this._layoutValuePx(item, "boxWidth", item.width || img.getScaledWidth());
           img.boxHeight = this._layoutValuePx(item, "boxHeight", item.height || img.getScaledHeight());
           this._fitImageToBox(img, img.boxWidth, img.boxHeight);
@@ -846,7 +928,8 @@
       const top = toNumber(obj.top, 0);
       const width = toNumber((_c = (_b = (_a2 = obj.getScaledWidth) == null ? void 0 : _a2.call(obj)) != null ? _b : obj.width) != null ? _c : 0, 0);
       const height = toNumber((_f = (_e = (_d = obj.getScaledHeight) == null ? void 0 : _d.call(obj)) != null ? _e : obj.height) != null ? _f : 0, 0);
-      const base = {
+      const metadata = this._elementMetadataFromObject(obj);
+      const base = __spreadProps(__spreadValues({
         type: obj.type,
         left,
         top,
@@ -855,9 +938,10 @@
         left_mm: this._pxToMm(left),
         top_mm: this._pxToMm(top),
         width_mm: this._pxToMm(width),
-        height_mm: this._pxToMm(height),
-        bindField: obj.bindField || ""
-      };
+        height_mm: this._pxToMm(height)
+      }, metadata), {
+        bindField: metadata.binding_key || ""
+      });
       if ((_g = obj.isType) == null ? void 0 : _g.call(obj, "textbox")) {
         const baseText = (_i = (_h = obj.baseText) != null ? _h : obj.text) != null ? _i : "";
         const fontSize = toNumber(obj.fontSize, 12);
@@ -928,8 +1012,8 @@
         return;
       this._syncPreviewPane(imageData);
     }
-    _buildLabelMarkup(objects = ((_a2) => (_a2 = this.fabricCanvas) == null ? void 0 : _a2.getObjects())() || [], data = this.page.resolveDoc() || {}) {
-      var _a3, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+    _buildLabelMarkup(objects = ((_a2) => (_a2 = this.fabricCanvas) == null ? void 0 : _a2.getObjects())() || []) {
+      var _a3, _b, _c, _d, _e, _f, _g;
       const parts = [];
       for (const obj of objects) {
         const leftMM = this._pxToMm(obj.left || 0).toFixed(3);
@@ -939,9 +1023,7 @@
         const widthMM = this._pxToMm(widthPx).toFixed(3);
         const heightMM = this._pxToMm(heightPx).toFixed(3);
         if ((_g = obj.isType) == null ? void 0 : _g.call(obj, "textbox")) {
-          const baseText = (_i = (_h = obj.baseText) != null ? _h : obj.text) != null ? _i : "";
-          const resolved = obj.bindField ? this._getByPath(data, obj.bindField) : void 0;
-          const text = escapeHtml(resolved === void 0 || resolved === null ? baseText : this._toStr(resolved));
+          const text = escapeHtml(this.page.getElementDisplayValue(obj, "print"));
           const fontSizeMM = this._pxToMm(obj.fontSize || 12).toFixed(3);
           const fontFamily = escapeHtml(obj.fontFamily || "Times New Roman");
           const fontWeight = escapeHtml(obj.fontWeight || "normal");
@@ -952,9 +1034,7 @@
             `<div class="bs-print-item bs-print-text" style="left:${leftMM}mm;top:${topMM}mm;width:${widthMM}mm;height:${heightMM}mm;padding:${paddingMM}mm;box-sizing:border-box;overflow:hidden;font-size:${fontSizeMM}mm;font-family:${fontFamily};font-weight:${fontWeight};font-style:${fontStyle};color:${fill};text-align:${obj.textAlign || "left"};">${text}</div>`
           );
         } else if (obj.customType === "barcode") {
-          const baseValue = (_k = (_j = obj.baseBarcodeValue) != null ? _j : obj.barcodeValue) != null ? _k : "";
-          const resolved = obj.bindField ? this._getByPath(data, obj.bindField) : void 0;
-          const value = escapeHtml(resolved === void 0 || resolved === null ? baseValue : this._toStr(resolved) || " ");
+          const value = this.page.getElementDisplayValue(obj, "print") || " ";
           const format = obj.format || "CODE128";
           const barWidth = Math.max(1, Math.round(toNumber(obj.barWidth, 2)));
           const barHeight = Math.max(1, Math.round(toNumber(obj.barHeight, 60)));
@@ -981,10 +1061,10 @@
       }
       return parts.join("");
     }
-    _buildSheetMarkup(data = this.page.resolveDoc() || {}) {
+    _buildSheetMarkup() {
       const widthMM = this.pageWidthMM;
       const heightMM = this.pageHeightMM;
-      return `<div class="bs-print-sheet" style="width:${widthMM}mm;height:${heightMM}mm;">${this._buildLabelMarkup(void 0, data)}</div>`;
+      return `<div class="bs-print-sheet" style="width:${widthMM}mm;height:${heightMM}mm;">${this._buildLabelMarkup()}</div>`;
     }
     _buildPreviewMarkup(imageData) {
       const widthMM = this.pageWidthMM;
@@ -1002,22 +1082,12 @@
       preview.html(this._buildPreviewMarkup(imageData));
     }
     _resolvePrintPayload(copies, templateName) {
-      const data = this.page.resolveDoc() || {};
-      const parentDoctype = data.doctype || this.page.doctype;
-      const parentName = data.name || this.page.docname;
-      const childField = data.__child_field || null;
-      const childRows = [];
-      if (childField && Array.isArray(data[childField])) {
-        for (const row of data[childField]) {
-          if (row == null ? void 0 : row.name)
-            childRows.push(row.name);
-        }
-      }
+      const context = this.page.getStudioContext();
       return {
-        parent_doctype: parentDoctype,
-        parent_name: parentName,
-        child_field: childField,
-        child_row_names: JSON.stringify(childRows),
+        parent_doctype: context.doctype || this.page.doctype,
+        parent_name: context.name || this.page.docname,
+        child_field: null,
+        child_row_names: "[]",
         copies,
         template_name: templateName || null
       };
@@ -1140,25 +1210,27 @@
       const unitDigits = this.page.getDimensionConfig(unit).digits;
       const pxToUnit = (px) => this.page.mmToUnit(this._pxToMm(px), unit);
       const unitToPx = (value) => this._mmToPx(this.page.unitToMm(value, unit));
-      const bindRow = () => $(`
-      <div class="form-group mb-1">
-        <label class="small text-muted">Bind Path</label>
-        <input
-          class="form-control form-control-sm"
-          name="bindField"
-          value="${escapeHtml(obj.bindField || "")}"
-          placeholder="e.g. item_code or items[0].item_name or items[].rate"
-        />
-        <small class="text-muted">Supports child paths. Leave empty for static.</small>
-      </div>
-    `);
+      const hasBinding = !!(obj.binding_key || obj.bindField);
+      const bindingRows = [
+        ["Label", "label", obj.label || ""],
+        ["Field", "fieldname", obj.fieldname || ""],
+        ["Binding Key", "binding_key", obj.binding_key || obj.bindField || ""],
+        ["Source Level", "source_level", obj.source_level || ""],
+        ["Child Table", "child_table_field", obj.child_table_field || ""],
+        ["Child DocType", "child_doctype", obj.child_doctype || ""],
+        ["Field Type", "fieldtype", obj.fieldtype || ""]
+      ];
       $panel.append(this._makeFieldRow(`Left (${unitLabel})`, "left", pxToUnit(obj.left || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
       $panel.append(this._makeFieldRow(`Top (${unitLabel})`, "top", pxToUnit(obj.top || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
-      $panel.append(bindRow());
+      for (const [label, name, value] of bindingRows) {
+        if (!value && !hasBinding)
+          continue;
+        $panel.append(this._makeFieldRow(label, name, value, "text", { readonly: true }));
+      }
       $panel.append(this._makeFieldRow(`Width (${unitLabel})`, "width", this.page.mmToUnit(this._currentObjectWidthMm(obj), unit).toFixed(unitDigits), "number", { readonly: true }));
       $panel.append(this._makeFieldRow(`Height (${unitLabel})`, "height", this.page.mmToUnit(this._currentObjectHeightMm(obj), unit).toFixed(unitDigits), "number", { readonly: true }));
       if ((_a2 = obj.isType) == null ? void 0 : _a2.call(obj, "textbox")) {
-        $panel.append(this._makeFieldRow("Text", "text", (_c = (_b = obj.baseText) != null ? _b : obj.text) != null ? _c : "", "text"));
+        $panel.append(this._makeFieldRow("Text", "text", (_c = (_b = obj.baseText) != null ? _b : obj.text) != null ? _c : "", "text", { readonly: hasBinding }));
         $panel.append(this._makeFieldRow(`Font Size (${unitLabel})`, "fontSize", pxToUnit(obj.fontSize || 12).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
         $panel.append(this._makeSelectRow("Text Align", "textAlign", obj.textAlign || "left", [
           { value: "left", label: "left" },
@@ -1167,8 +1239,8 @@
           { value: "justify", label: "justify" }
         ]));
       } else if (obj.customType === "barcode") {
-        $panel.append(this._makeFieldRow("Value", "barcodeValue", (_e = (_d = obj.baseBarcodeValue) != null ? _d : obj.barcodeValue) != null ? _e : "", "text"));
-        $panel.append(this._makeFieldRow("Format", "format", obj.format || "CODE128", "text"));
+        $panel.append(this._makeFieldRow("Value", "barcodeValue", (_e = (_d = obj.baseBarcodeValue) != null ? _d : obj.barcodeValue) != null ? _e : "", "text", { readonly: hasBinding }));
+        $panel.append(this._makeFieldRow("Barcode Format", "format", obj.format || "CODE128", "text"));
         $panel.append(this._makeFieldRow(`Bar Width (${unitLabel})`, "barWidth", pxToUnit(obj.barWidth || 2).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
         $panel.append(this._makeFieldRow(`Bar Height (${unitLabel})`, "barHeight", pxToUnit(obj.barHeight || 60).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
         $panel.append(this._makeFieldRow(`Margin Top (${unitLabel})`, "marginTop", pxToUnit(obj.marginTop || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
@@ -1181,7 +1253,11 @@
         ]));
       }
       const updateObject = (name, rawValue) => {
-        var _a3, _b2, _c2;
+        const readonlyNames = ["label", "fieldname", "binding_key", "source_level", "child_table_field", "child_doctype", "fieldtype"];
+        if (readonlyNames.includes(name))
+          return;
+        if ((name === "text" || name === "barcodeValue") && hasBinding)
+          return;
         let value = rawValue;
         if (name === "displayValue")
           value = rawValue === "1";
@@ -1202,15 +1278,6 @@
         }
         if (name === "barcodeValue") {
           obj.baseBarcodeValue = value;
-        }
-        if (name === "bindField" && !value) {
-          if ((_a3 = obj.isType) == null ? void 0 : _a3.call(obj, "textbox")) {
-            obj.set("text", (_b2 = obj.baseText) != null ? _b2 : "");
-          } else if (obj.customType === "barcode") {
-            obj.set("barcodeValue", (_c2 = obj.baseBarcodeValue) != null ? _c2 : "");
-            obj._barcodeSignature = null;
-            void this._refreshBarcodeObject(obj);
-          }
         }
         if (obj.customType === "barcode" && [
           "barcodeValue",
@@ -1254,24 +1321,28 @@
     constructor(wrapper) {
       this.wrapper = wrapper;
       const route = getRouteState();
-      this.doctype = route.doctype;
-      this.docname = route.docname;
-      this.templateName = route.templateName;
+      this.studioContext = this._readStudioContext(route);
+      this.doctype = this.studioContext.doctype || route.doctype || "Item";
+      this.docname = this.studioContext.name || route.docname || "";
+      this.templateName = this.studioContext.template || route.templateName;
+      this.selectedBarcodeDoctype = this.studioContext.barcode_doctype || null;
       this.pageWidthMM = BARCODE_STUDIO_DEFAULT_WIDTH_MM;
       this.pageHeightMM = BARCODE_STUDIO_DEFAULT_HEIGHT_MM;
       this.scale = 1;
       this.snapMM = 1;
       this.gridVisible = false;
       this.meta = null;
+      this.barcodeConfig = null;
+      this.configMessage = "";
       this.fields = [];
       this.childFieldGroups = {};
       this.templateDesignFields = [];
       this.templateSourceDoctype = "";
       this.doc = null;
-      this.docFromRoute = normalizeCtx(this._parseCtxFromRoute() || this._parseCtxFromRouteOptions());
       this.state = new BarcodeStudioStateStore();
       this.dimensionUnit = this.state.get("unit", BARCODE_STUDIO_DEFAULT_UNIT);
       this._loadToken = 0;
+      this._warnedBindings = /* @__PURE__ */ new Set();
       this.canvas = new BarcodeStudioCanvasController(this);
       this.canvasClearButton = null;
       this.initPage();
@@ -1336,52 +1407,96 @@
       (_b = (_a2 = this.canvas) == null ? void 0 : _a2.destroy) == null ? void 0 : _b.call(_a2);
     }
     resolveDoc() {
-      return this.docFromRoute || this.doc || null;
+      return this.getRenderData();
     }
-    _parseCtxFromRoute() {
-      try {
-        const sources = [window.location.hash || "", window.location.search || ""];
-        for (const source of sources) {
-          const qIndex = source.indexOf("?");
-          if (qIndex === -1)
-            continue;
-          const params = new URLSearchParams(source.slice(qIndex + 1));
-          if (!params.has("ctx"))
-            continue;
-          const raw = decodeURIComponent(params.get("ctx") || "");
-          try {
-            return JSON.parse(raw);
-          } catch (e) {
-            try {
-              return JSON.parse(atob(raw));
-            } catch (e2) {
-              continue;
-            }
-          }
-        }
-      } catch (e) {
-        return null;
+    getStudioContext() {
+      return this.studioContext || {};
+    }
+    getRenderData() {
+      var _a2;
+      const data = (_a2 = this.studioContext) == null ? void 0 : _a2.render_data;
+      return data && typeof data === "object" ? data : {};
+    }
+    getAllowedBindingKeys() {
+      return new Set((this.fields || []).map((field) => field.binding_key || field.fieldname).filter(Boolean));
+    }
+    isBindingAllowed(bindingKey) {
+      if (!bindingKey)
+        return true;
+      return this.getAllowedBindingKeys().has(bindingKey);
+    }
+    getElementDisplayValue(element, mode = "design") {
+      var _a2, _b, _c, _d;
+      const key = (element == null ? void 0 : element.binding_key) || (element == null ? void 0 : element.bindField) || (element == null ? void 0 : element.fieldname) || "";
+      const label = (element == null ? void 0 : element.label) || (element == null ? void 0 : element.baseText) || (element == null ? void 0 : element.text) || (element == null ? void 0 : element.fieldname) || key || "";
+      if (mode === "design") {
+        return label;
       }
-      return null;
+      if (!key) {
+        return (_d = (_c = (_b = (_a2 = element == null ? void 0 : element.baseBarcodeValue) != null ? _a2 : element == null ? void 0 : element.barcodeValue) != null ? _b : element == null ? void 0 : element.baseText) != null ? _c : element == null ? void 0 : element.text) != null ? _d : label;
+      }
+      if (!this.isBindingAllowed(key)) {
+        this._warnUnauthorizedBinding(key);
+        return "";
+      }
+      const renderData = this.getRenderData();
+      if (renderData && renderData[key] !== void 0 && renderData[key] !== null) {
+        return String(renderData[key]);
+      }
+      if (element == null ? void 0 : element.sample_value) {
+        return String(element.sample_value);
+      }
+      return label;
     }
-    _parseCtxFromRouteOptions() {
+    _warnUnauthorizedBinding(bindingKey) {
+      if (!bindingKey || this._warnedBindings.has(bindingKey))
+        return;
+      this._warnedBindings.add(bindingKey);
+      console.warn(`Barcode Studio ignored unauthorized binding_key: ${bindingKey}`);
+    }
+    _readStudioContext(route = getRouteState()) {
       try {
         const routeOptions = frappe.route_options || {};
-        if (!routeOptions.ctx)
-          return null;
-        if (typeof routeOptions.ctx === "string") {
-          try {
-            return JSON.parse(routeOptions.ctx);
-          } catch (e) {
-            return null;
-          }
-        }
-        if (typeof routeOptions.ctx === "object")
-          return routeOptions.ctx;
-        return null;
+        const hasRenderData = routeOptions.render_data && typeof routeOptions.render_data === "object";
+        return {
+          doctype: routeOptions.doctype || route.doctype || null,
+          name: routeOptions.name || routeOptions.docname || route.docname || "",
+          template: routeOptions.template || route.templateName || null,
+          barcode_doctype: routeOptions.barcode_doctype || null,
+          render_data: hasRenderData ? routeOptions.render_data : this._flatRouteOptions(routeOptions)
+        };
       } catch (e) {
-        return null;
+        return {
+          doctype: route.doctype || null,
+          name: route.docname || "",
+          template: route.templateName || null,
+          barcode_doctype: null,
+          render_data: {}
+        };
       }
+    }
+    _flatRouteOptions(routeOptions) {
+      if (!routeOptions || typeof routeOptions !== "object")
+        return {};
+      const out = {};
+      for (const [key, value] of Object.entries(routeOptions)) {
+        if (key === "render_data")
+          continue;
+        if (value === null || value === void 0)
+          continue;
+        if (typeof value === "object")
+          continue;
+        out[key] = value;
+      }
+      return out;
+    }
+    isBarcodeField(field = {}) {
+      const fieldtype = String(field.fieldtype || "").toLowerCase();
+      const fieldname = String(field.fieldname || "").toLowerCase();
+      const bindingKey = String(field.binding_key || field.path || field.fieldname || "").toLowerCase();
+      const label = String(field.label || field.displayLabel || "").toLowerCase();
+      const bindingParts = bindingKey.split("_").filter(Boolean);
+      return fieldtype === "barcode" || fieldname === "barcode" || label === "barcode" || bindingParts[bindingParts.length - 1] === "barcode";
     }
     initPage() {
       var _a2;
@@ -1468,6 +1583,11 @@
       }, 300)) || (() => void this.bootstrap()));
       $("#bs-template").on("change", (event) => {
         const templateName = event.target.value || "";
+        this.templateName = templateName || null;
+        this.studioContext.template = this.templateName;
+        if (frappe.route_options) {
+          frappe.route_options.template = this.templateName;
+        }
         frappe.set_route("barcode-studio", this.doctype, this.docname || "", templateName || "");
       });
       this.page.wrapper.on("click", ".bs-clear-value", () => this.canvas.clearActiveValue());
@@ -1551,7 +1671,7 @@
       $("#bs-name").val(this.docname);
       this.templateDesignFields = [];
       this.templateSourceDoctype = "";
-      await this.loadMetaAndDoc();
+      await this.loadBarcodeConfig();
       if (token !== this._loadToken)
         return;
       await this.fillTemplates();
@@ -1572,78 +1692,54 @@
     }
     async onRoute() {
       const route = getRouteState();
-      const ctx = normalizeCtx(this._parseCtxFromRoute() || this._parseCtxFromRouteOptions());
-      const changed = route.doctype !== this.doctype || route.docname !== this.docname || route.templateName !== this.templateName || !!ctx;
+      const context = this._readStudioContext(route);
+      const changed = context.doctype !== this.doctype || context.name !== this.docname || context.template !== this.templateName || context.barcode_doctype !== this.selectedBarcodeDoctype || Object.keys(context.render_data || {}).length;
       if (!changed)
         return;
-      this.doctype = route.doctype;
-      this.docname = route.docname;
-      this.templateName = route.templateName;
-      this.docFromRoute = ctx;
+      this.studioContext = context;
+      this.doctype = context.doctype || route.doctype || "Item";
+      this.docname = context.name || route.docname || "";
+      this.templateName = context.template || route.templateName;
+      this.selectedBarcodeDoctype = context.barcode_doctype || null;
       $("#bs-dt").val(this.doctype);
       $("#bs-name").val(this.docname);
       void this.bootstrap();
     }
-    async _withDoctype(doctype) {
-      return new Promise((resolve) => {
-        frappe.model.with_doctype(doctype, () => resolve());
-      });
-    }
-    async loadMetaAndDoc() {
+    async loadBarcodeConfig() {
+      var _a2, _b;
+      const previousContext = this.studioContext || {};
       this.doctype = ($("#bs-dt").val() || this.doctype || "Item").trim();
       this.docname = ($("#bs-name").val() || this.docname || "").trim();
+      const sameSource = previousContext.doctype === this.doctype && (previousContext.name || "") === this.docname;
+      if (previousContext.doctype && previousContext.doctype !== this.doctype) {
+        this.selectedBarcodeDoctype = null;
+      }
+      this.studioContext = __spreadProps(__spreadValues({}, previousContext), {
+        doctype: this.doctype,
+        name: this.docname,
+        template: this.templateName || null,
+        barcode_doctype: this.selectedBarcodeDoctype || null,
+        render_data: sameSource ? this.getRenderData() : {}
+      });
       this.fields = [];
       this.childFieldGroups = {};
+      this.barcodeConfig = null;
+      this.configMessage = "";
       try {
-        await this._withDoctype(this.doctype);
-        this.meta = frappe.get_meta(this.doctype);
-        this.fields = (this.meta.fields || []).filter((df) => BARCODE_STUDIO_FIELD_TYPES.has(df.fieldtype)).map((df) => ({
-          label: df.label || df.fieldname,
-          fieldname: df.fieldname,
-          fieldtype: df.fieldtype
-        }));
-        if (!this.fields.find((field) => field.fieldname === "name")) {
-          this.fields.unshift({ label: "name", fieldname: "name", fieldtype: "Data" });
-        }
-        const childTables = (this.meta.fields || []).filter((df) => df.fieldtype === "Table");
-        for (const ct of childTables) {
-          if (!ct.options)
-            continue;
-          await this._withDoctype(ct.options);
-          const childMeta = frappe.get_meta(ct.options);
-          const childFields = (childMeta.fields || []).filter((df) => BARCODE_STUDIO_FIELD_TYPES.has(df.fieldtype)).map((df) => ({
-            label: `${ct.label || ct.fieldname} \u203A ${df.label || df.fieldname}`,
-            fieldname: `${ct.fieldname}.${df.fieldname}`,
-            fieldname_indexed: `${ct.fieldname}[].${df.fieldname}`,
-            fieldtype: df.fieldtype,
-            child_table: ct.fieldname
-          }));
-          this.childFieldGroups[ct.fieldname] = {
-            child_dt: ct.options,
-            fields: childFields
-          };
-        }
+        const response = await frappe.call({
+          method: "mysys_barcode.api.get_barcode_doctype_config",
+          args: {
+            target_doctype: this.doctype,
+            barcode_doctype: this.selectedBarcodeDoctype || null
+          }
+        });
+        this.barcodeConfig = response.message || null;
+        this.selectedBarcodeDoctype = ((_a2 = this.barcodeConfig) == null ? void 0 : _a2.name) || this.selectedBarcodeDoctype || null;
+        this.fields = Array.isArray((_b = this.barcodeConfig) == null ? void 0 : _b.fields) ? this.barcodeConfig.fields : [];
+        this.studioContext.barcode_doctype = this.selectedBarcodeDoctype;
       } catch (error) {
-        console.error("Failed to load meta/doc", error);
-        this.meta = null;
-      }
-      const routeDoc = this.docFromRoute && typeof this.docFromRoute === "object" ? this.docFromRoute : null;
-      const canUseRouteDoc = routeDoc && (!routeDoc.doctype || routeDoc.doctype === this.doctype) && (!routeDoc.name || routeDoc.name === this.docname || !this.docname);
-      if (canUseRouteDoc) {
-        this.doc = routeDoc;
-      } else if (this.docname) {
-        try {
-          const response = await frappe.call({
-            method: "frappe.client.get",
-            args: { doctype: this.doctype, name: this.docname }
-          });
-          this.doc = response.message || null;
-        } catch (error) {
-          console.error("Failed to load document", error);
-          this.doc = null;
-        }
-      } else {
-        this.doc = null;
+        console.warn("Failed to load Barcode DocType configuration", error);
+        this.configMessage = __("No Barcode DocType configuration found for this DocType. Please create one first.");
       }
     }
     async fillTemplates() {
@@ -1670,6 +1766,11 @@
       const uiKey = "bs_field_groups";
       const saved = safeJsonParse(localStorage.getItem(uiKey), {});
       const forceOpen = !!query;
+      if (this.configMessage) {
+        $panel.html(`<div class="text-muted small">${escapeHtml(this.configMessage)}</div>`);
+        $("#bs-fields-collapse-toggle").text("Expand All");
+        return;
+      }
       const makeChip = (label, dataset, pathShown) => {
         const chip = $(`
         <div class="bs-field-chip" draggable="true" title="${escapeHtml(pathShown || dataset.path || "")}">
@@ -1678,10 +1779,24 @@
         </div>
       `);
         chip.on("dragstart", (event) => {
-          event.originalEvent.dataTransfer.setData("text/plain", JSON.stringify(dataset));
+          const dataTransfer = event.originalEvent.dataTransfer;
+          const payload = JSON.stringify(dataset);
+          dataTransfer.effectAllowed = "copy";
+          dataTransfer.setData("application/x-mysys-barcode-field", payload);
+          dataTransfer.setData("text/plain", payload);
+        });
+        chip.on("click", () => {
+          this.canvas.addFieldElement(dataset);
         });
         if (query) {
-          const haystack = [label || "", dataset.path || "", pathShown || ""].join(" ").toLowerCase();
+          const haystack = [
+            label || "",
+            dataset.fieldname || "",
+            dataset.binding_key || "",
+            dataset.child_table_field || "",
+            dataset.child_doctype || "",
+            pathShown || ""
+          ].join(" ").toLowerCase();
           if (haystack.includes(query))
             chip.addClass("match");
         }
@@ -1721,91 +1836,54 @@
         }
         return group;
       };
-      const templateFields = Array.isArray(this.templateDesignFields) ? this.templateDesignFields.filter(Boolean) : [];
-      if (templateFields.length) {
-        const documentFields = [];
-        const childGroups = /* @__PURE__ */ new Map();
-        for (const row of templateFields) {
-          const scope = row.scope || "Document";
-          const label = row.label || row.fieldname || row.bind_path || "";
-          const path = row.bind_path || row.path || row.fieldname || "";
-          const kind = String(row.fieldtype || "").toLowerCase() === "barcode" ? "barcode" : "text";
-          const dataset = {
-            path,
-            fieldname: row.fieldname || path,
-            fieldtype: row.fieldtype || "Data",
-            label,
-            displayLabel: label,
-            scope,
-            parent_fieldname: row.parent_fieldname || "",
-            child_doctype: row.child_doctype || "",
-            kind
-          };
-          const haystack = [label, path, row.fieldname || "", row.parent_fieldname || "", row.child_doctype || ""].join(" ").toLowerCase();
-          if (query && !haystack.includes(query))
-            continue;
-          if (scope === "Child Table") {
-            const groupKey = row.parent_fieldname || row.child_doctype || "child";
-            if (!childGroups.has(groupKey)) {
-              childGroups.set(groupKey, {
-                title: row.child_doctype || row.parent_fieldname || __("Child Table"),
-                open: forceOpen || saved[groupKey] === true,
-                items: []
-              });
-            }
-            childGroups.get(groupKey).items.push(makeChip(label, dataset, path));
-          } else {
-            documentFields.push(makeChip(label, dataset, path));
-          }
-        }
-        if (documentFields.length) {
-          makeGroup("Document", "", true, documentFields, false);
-        }
-        for (const [groupKey, groupInfo] of childGroups.entries()) {
-          makeGroup(groupInfo.title, groupKey, groupInfo.open, groupInfo.items);
-        }
-        if (!$panel.children().length) {
-          $panel.html("<div class='text-muted'>No fields</div>");
-        }
-        const anyOpen2 = $(".bs-field-group[data-ct]").toArray().some((el) => el.classList.contains("open"));
-        $("#bs-fields-collapse-toggle").text(anyOpen2 ? "Collapse All" : "Expand All");
-        return;
-      }
-      const topWrap = [];
+      const documentFields = [];
+      const childGroups = /* @__PURE__ */ new Map();
       for (const field of this.fields || []) {
+        const bindingKey = field.binding_key || field.fieldname || "";
+        const label = field.label || field.fieldname || bindingKey;
         if (query) {
-          const haystack = [field.label || field.fieldname || "", field.fieldname || ""].join(" ").toLowerCase();
+          const haystack = [
+            label,
+            field.fieldname || "",
+            bindingKey,
+            field.child_table_field || "",
+            field.child_doctype || ""
+          ].join(" ").toLowerCase();
           if (!haystack.includes(query))
             continue;
         }
-        topWrap.push(makeChip(field.label || field.fieldname, {
-          path: field.fieldname,
-          fieldname: field.fieldname,
+        const dataset = {
+          path: bindingKey,
+          label,
+          displayLabel: label,
+          fieldname: field.fieldname || bindingKey,
+          binding_key: bindingKey,
+          source_level: field.source_level || "Document",
+          child_table_field: field.child_table_field || null,
+          child_doctype: field.child_doctype || null,
           fieldtype: field.fieldtype,
-          displayLabel: field.label || field.fieldname,
-          kind: String(field.fieldtype || "").toLowerCase() === "barcode" ? "barcode" : "text"
-        }));
-      }
-      makeGroup("Top-level", "", true, topWrap, false);
-      for (const [ct, groupInfo] of Object.entries(this.childFieldGroups || {})) {
-        const open = forceOpen || saved[ct] === true;
-        const chips = [];
-        for (const field of groupInfo.fields || []) {
-          if (query) {
-            const haystack = [field.label || "", field.fieldname || "", field.fieldname_indexed || ""].join(" ").toLowerCase();
-            if (!haystack.includes(query))
-              continue;
+          sample_value: field.sample_value || ""
+        };
+        dataset.kind = this.isBarcodeField(dataset) ? "barcode" : "text";
+        if (dataset.source_level === "Child Table") {
+          const groupKey = field.child_table_field || field.child_doctype || "child";
+          if (!childGroups.has(groupKey)) {
+            childGroups.set(groupKey, {
+              title: field.child_table_field || field.child_doctype || __("Child Table"),
+              open: forceOpen || saved[groupKey] === true,
+              items: []
+            });
           }
-          chips.push(makeChip(field.label, {
-            path: field.fieldname_indexed,
-            fieldname: field.fieldname_indexed,
-            fieldtype: field.fieldtype,
-            is_child: true,
-            displayLabel: field.label || field.fieldname_indexed,
-            kind: String(field.fieldtype || "").toLowerCase() === "barcode" ? "barcode" : "text"
-          }, field.fieldname_indexed));
+          childGroups.get(groupKey).items.push(makeChip(label, dataset, bindingKey));
+        } else {
+          documentFields.push(makeChip(label, dataset, bindingKey));
         }
-        makeGroup(`${ct} (Child)`, ct, open, chips);
+      }
+      if (documentFields.length) {
+        makeGroup("Document", "", true, documentFields, false);
+      }
+      for (const [groupKey, groupInfo] of childGroups.entries()) {
+        makeGroup(groupInfo.title, groupKey, groupInfo.open, groupInfo.items);
       }
       if (!$panel.children().length) {
         $panel.html("<div class='text-muted'>No fields</div>");
@@ -1974,6 +2052,10 @@
               $("#bs-template").val(this.templateName);
               dialog.hide();
               frappe.show_alert({ message: __("Template saved"), indicator: "green" });
+              this.studioContext.template = this.templateName;
+              if (frappe.route_options) {
+                frappe.route_options.template = this.templateName;
+              }
               frappe.set_route("barcode-studio", this.doctype, this.docname || "", this.templateName);
             }
           } catch (error) {
@@ -2008,4 +2090,4 @@
   window.mysysBarcodeStudio = window.mysysBarcodeStudio || {};
   window.mysysBarcodeStudio.mountBarcodeStudio = mountBarcodeStudio;
 })();
-//# sourceMappingURL=barcode_studio.bundle.VC6AM7XT.js.map
+//# sourceMappingURL=barcode_studio.bundle.Q3CB3GEM.js.map

@@ -21,7 +21,9 @@ mysys.qbp.Page = class {
     this.child_field = 'items';
     this.templates = [];
     this.templateLayout = [];      // layout_json بعد اختيار القالب
+    this.templateSourceDoctype = "";
     this.extra_by_row = {};        // بيانات إضافية لكل صف من دالة py
+    this.route_options_by_row = {};
 
     // /app/quick-barcode-print?doc=Sales%20Invoice/SINV-0001
     const q = frappe.utils.get_query_params();
@@ -78,6 +80,64 @@ mysys.qbp.Page = class {
     const ex = this.extra_by_row && this.extra_by_row[row.name];
     if (ex) Object.assign(data, ex);
     return data;
+  }
+
+  _getRowByCdn(cdn){
+    return (this.items || []).find(x => x.name === cdn) || null;
+  }
+
+  _routeOptionsCacheKey(row, template){
+    return `${row?.name || ""}::${template || ""}::${this.templateSourceDoctype || ""}`;
+  }
+
+  async _prepareRouteOptionsForRow(row, { force = false } = {}){
+    if (!row) return null;
+    const template = $("#qbp-template").val() || "";
+    const key = this._routeOptionsCacheKey(row, template);
+    if (!force && this.route_options_by_row[key]) {
+      return this.route_options_by_row[key];
+    }
+
+    const response = await frappe.call({
+      method: 'mysys_barcode.api.prepare_quick_barcode_route_options',
+      args: {
+        parent_doctype: this.doc.doctype,
+        parent_name: this.doc.name,
+        child_field: this.child_field || 'items',
+        child_row_name: row.name,
+        template,
+        target_doctype: this.templateSourceDoctype || null,
+      },
+    });
+    const routeOptions = response.message || {};
+    this.route_options_by_row[key] = routeOptions;
+    return routeOptions;
+  }
+
+  async _prepareRouteOptionsForRows(rows, { force = false } = {}){
+    const out = {};
+    await Promise.all((rows || []).map(async (entry) => {
+      const routeOptions = await this._prepareRouteOptionsForRow(entry.row, { force });
+      if (routeOptions) out[entry.cdn] = routeOptions;
+    }));
+    return out;
+  }
+
+  _getRenderValue(layoutObject, routeOptions, legacyData){
+    const renderData = routeOptions?.render_data || {};
+    const key = layoutObject?.binding_key || layoutObject?.bindField || layoutObject?.fieldname || "";
+    if (key && Object.prototype.hasOwnProperty.call(renderData, key)) {
+      return renderData[key];
+    }
+
+    if (layoutObject?.sample_value) return layoutObject.sample_value;
+
+    if (legacyData && layoutObject?.bindField) {
+      const legacyValue = this._getByPath(legacyData, layoutObject.bindField);
+      if (legacyValue !== undefined && legacyValue !== null) return legacyValue;
+    }
+
+    return layoutObject?.label || layoutObject?.baseText || layoutObject?.text || layoutObject?.barcodeValue || key || "";
   }
 
   // توليد SVG نصّي بالعميل
@@ -145,9 +205,10 @@ mysys.qbp.Page = class {
   /* =========================================================
    * Template-driven label build
    * =======================================================*/
-  _buildLabelFromLayout(layout, data){
+  _buildLabelFromLayout(layout, routeOptions, legacyData){
     const px2mm = (px)=> (px / this.mmToPx).toFixed(3);
     const esc = this._esc;
+    const renderValue = (layoutObject) => this._getRenderValue(layoutObject, routeOptions, legacyData);
 
     // Placeholders الشائعة ("Smartphone" ... إلخ)
     const PLACEHOLDER_RE = /^(smart\s*phone|smartphone|sample|example|item\s*name|product\s*name)$/i;
@@ -178,17 +239,17 @@ mysys.qbp.Page = class {
       const h    = px2mm(o.height || o.boxHeight || 0);
 
       if (o.type === "textbox" || o.customType === "text"){
-        let txt = "";
-        if (o.bindField){
-          const v = this._getByPath(data, o.bindField);
+        let txt = renderValue(o);
+        if (txt === "" && o.bindField){
+          const v = this._getByPath(legacyData, o.bindField);
           txt = (v==null ? "" : v);
         }else if (typeof o.text === 'string' && o.text.includes('{{')){
           txt = o.text.replace(/{{\s*([^}]+)\s*}}/g, (_m,p1)=>{
-            const v = this._getByPath(data, String(p1).trim());
+            const v = this._getByPath(legacyData, String(p1).trim());
             return (v==null?'':v);
           });
-        }else{
-          txt = coercePlaceholder(o.text, data);
+        }else if (!txt){
+          txt = coercePlaceholder(o.text, legacyData || {});
         }
         const fontMM = px2mm(o.fontSize || 12);
         parts.push(
@@ -197,7 +258,7 @@ mysys.qbp.Page = class {
         );
       }
       else if (o.customType === "barcode" || o.type === "image"){
-        const val = (o.bindField ? (this._getByPath(data, o.bindField) ?? o.barcodeValue) : o.barcodeValue) || "";
+        const val = renderValue(o) || "";
         const fmt = o.format || "CODE128";
         const barWidth  = parseInt(o.barWidth  || 2, 10);
         const barHeight = parseInt(o.barHeight || 60, 10);
@@ -223,17 +284,6 @@ mysys.qbp.Page = class {
   init_ui(){
     const body = this.page.body;
     body.empty();
-
-    // CSS للعلامة الخضراء
-    if (!document.getElementById('qbp-printed-style')){
-      const st = document.createElement('style');
-      st.id = 'qbp-printed-style';
-      st.textContent = `
-        .qbp-row-printed { background:#e8f7ea !important; }
-        .qbp-printed-badge { font-size:10px; color:#1f7a1f; margin-left:6px; }
-      `;
-      document.head.appendChild(st);
-    }
 
     const html = frappe.render_template('quick_barcode_print', {
       doc: this.doc,
@@ -263,11 +313,11 @@ mysys.qbp.Page = class {
     // زر إعادة تحميل القالب
     if (!document.getElementById('qbp-reload-template')){
       const $btn = $(
-        `<button id="qbp-reload-template" class="btn btn-light btn-sm" style="margin-left:6px">
+        `<button id="qbp-reload-template" class="btn btn-light btn-sm">
            <i class="fa fa-rotate-right"></i> ${__("Reload Template")}
          </button>`
       );
-      $("#qbp-template").after($btn);
+      $("#qbp-toolbar-extra").append($btn);
       $btn.on("click", async ()=>{
         const name = $("#qbp-template").val();
         if (!name) return frappe.show_alert({ message: __("Select a template first."), indicator: "orange" });
@@ -280,14 +330,15 @@ mysys.qbp.Page = class {
     // زر تحديث بيانات الصفوف من py
     if (!document.getElementById('qbp-refresh-extra')){
       const $btn = $(
-        `<button id="qbp-refresh-extra" class="btn btn-light btn-sm" style="margin-left:6px">
+        `<button id="qbp-refresh-extra" class="btn btn-light btn-sm">
            <i class="fa fa-database"></i> ${__("Refresh Row Data")}
          </button>`
       );
-      $("#qbp-template").after($btn);
+      $("#qbp-toolbar-extra").append($btn);
       $btn.on("click", async ()=>{
         const rows = this._collect_rows();
         this.extra_by_row = await this._fetch_rows_extra(rows);
+        this.route_options_by_row = {};
         this.render_preview();
         frappe.show_alert({ message: __("Row data refreshed."), indicator: "green" });
       });
@@ -296,12 +347,12 @@ mysys.qbp.Page = class {
     // فلتر “عرض غير المطبوعة فقط” + تصفير العلامات
     if (!document.getElementById('qbp-only-unprinted')){
       const $filter = $(`
-        <label class="ml-2 small">
+        <label class="qbp-check">
           <input id="qbp-only-unprinted" type="checkbox" />
           ${__("Show only unprinted")}
         </label>
       `);
-      $("#qbp-template").after($filter);
+      $("#qbp-toolbar-extra").append($filter);
       $("#qbp-only-unprinted").on("change", ()=>{
         const only = $("#qbp-only-unprinted").prop("checked");
         if (only) $("#qbp-items-body tr[data-cdn].qbp-row-printed").hide();
@@ -309,8 +360,8 @@ mysys.qbp.Page = class {
       });
     }
     if (!document.getElementById('qbp-reset-marks')){
-      const $reset = $(`<button id="qbp-reset-marks" class="btn btn-xs btn-light ml-2">${__("Reset marks")}</button>`);
-      $("#qbp-template").after($reset);
+      const $reset = $(`<button id="qbp-reset-marks" class="btn btn-light btn-sm">${__("Reset marks")}</button>`);
+      $("#qbp-toolbar-extra").append($reset);
       $("#qbp-reset-marks").on("click", ()=>{
         this._reset_print_marks();
         frappe.show_alert({ message: __("Marks cleared"), indicator: "orange" });
@@ -348,6 +399,11 @@ mysys.qbp.Page = class {
       $(ev.currentTarget).closest(".pill").remove();
       this.render_preview();
     });
+    $("#qbp-items-body").on("click",".qbp-row-studio",(ev)=>{
+      const cdn = ev.currentTarget.getAttribute("data-cdn");
+      const row = this._getRowByCdn(cdn);
+      void this.open_in_studio(row ? { cdn, row } : null);
+    });
 
     // أزرار رئيسية
     $("#qbp-open-studio").on("click", ()=> this.open_in_studio());
@@ -374,7 +430,14 @@ mysys.qbp.Page = class {
     })();
 
     // أول معاينة + أول تطبيق لعلامات المطبوعة
-    this.render_preview().then(()=> this._apply_print_marks());
+    void (async () => {
+      const initialTemplate = $("#qbp-template").val();
+      if (initialTemplate) {
+        await this._load_template(initialTemplate);
+      }
+      await this.render_preview();
+      this._apply_print_marks();
+    })();
   }
 
   /* =========================================================
@@ -396,6 +459,8 @@ mysys.qbp.Page = class {
         args: { name }
       });
       const d = r.message || {};
+      this.templateSourceDoctype = d.source_doctype || "";
+      this.route_options_by_row = {};
       if (d.page_width_mm && d.page_height_mm){
         this.pageW = parseFloat(d.page_width_mm);
         this.pageH = parseFloat(d.page_height_mm);
@@ -412,6 +477,8 @@ mysys.qbp.Page = class {
     }catch(err){
       console.error(err);
       this.templateLayout = [];
+      this.templateSourceDoctype = "";
+      this.route_options_by_row = {};
       $("#qbp-templates-info").text(__('Failed to load template info.'));
     }
   }
@@ -468,6 +535,14 @@ mysys.qbp.Page = class {
     if ((this.templateLayout||[]).length){
       // اجلب بيانات إضافية حسب الصفوف المختارة ليتوحّد الناتج مع الاستوديو
       this.extra_by_row = await this._fetch_rows_extra(rows);
+      let routeOptionsByRow = {};
+      try {
+        routeOptionsByRow = await this._prepareRouteOptionsForRows(rows);
+      } catch (error) {
+        console.error('Unable to prepare row route options', error);
+        $pv.html(`<div class="text-danger">${__('Unable to prepare Barcode Studio data.')}</div>`);
+        return;
+      }
 
       const limit = Math.min(8, rows.reduce((s,r)=> s + r.copies, 0));
       let count = 0;
@@ -476,13 +551,13 @@ mysys.qbp.Page = class {
       for (const r of rows){
         for (let i=0;i<r.copies;i++){
           if (count>=limit) break;
-          const data = this._buildDataForRow(r.row);
-          htmls.push(this._buildLabelFromLayout(this.templateLayout, data));
+          const legacyData = this._buildDataForRow(r.row);
+          htmls.push(this._buildLabelFromLayout(this.templateLayout, routeOptionsByRow[r.cdn], legacyData));
           count++;
         }
         if (count>=limit) break;
       }
-      $pv.html(`<style>.label{border:1px dashed #ddd;margin:6px;display:inline-block}</style>${htmls.join('')}`);
+      $pv.html(htmls.join(''));
       return;
     }
 
@@ -509,6 +584,14 @@ mysys.qbp.Page = class {
       return frappe.msgprint(__('Select a template first.'));
     }
 
+    let routeOptionsByRow = {};
+    try {
+      routeOptionsByRow = await this._prepareRouteOptionsForRows(rows, { force: true });
+    } catch (error) {
+      console.error('Unable to prepare row route options', error);
+      return frappe.msgprint(__('Unable to prepare Barcode Studio data.'));
+    }
+
     // 👇 نعلّم الصفوف كمطبوعة مباشرة لردّ فعل لحظي
     const printedNames = rows.map(r=>r.cdn);
     this._mark_rows_printed(printedNames);
@@ -518,8 +601,8 @@ mysys.qbp.Page = class {
     rows.forEach(r=>{
       const repeats = Math.max(1, r.copies) * Math.max(1, globalCopies);
       for (let i=0;i<repeats;i++){
-        const data = this._buildDataForRow(r.row);
-        labels.push(this._buildLabelFromLayout(this.templateLayout, data));
+        const legacyData = this._buildDataForRow(r.row);
+        labels.push(this._buildLabelFromLayout(this.templateLayout, routeOptionsByRow[r.cdn], legacyData));
       }
     });
 
@@ -542,15 +625,26 @@ mysys.qbp.Page = class {
   /* =========================================================
    * Studio
    * =======================================================*/
-  open_in_studio(){
-    const payload = Object.assign({}, this.doc);
-    payload[this.child_field] = this.items;
-    payload.__child_field = this.child_field;
-    const template = $("#qbp-template").val() || "";
-    const ctx = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-    const templatePath = template ? `/${encodeURIComponent(template)}` : "";
-    const path = `#/barcode-studio/${encodeURIComponent(this.doc.doctype)}/${encodeURIComponent(this.doc.name)}${templatePath}?ctx=${encodeURIComponent(ctx)}`;
-    const url  = `${frappe.urllib.get_base_url()}/app/${path.replace('#/','')}`;
-    window.open(url, '_blank', 'noopener');
+  async open_in_studio(rowInfo = null){
+    const rows = rowInfo ? [rowInfo] : this._collect_rows();
+    if (!rows.length) {
+      return frappe.msgprint(__('No rows selected'));
+    }
+    if (!rowInfo && rows.length > 1) {
+      frappe.show_alert({ message: __('Opening the first selected item in Barcode Studio.'), indicator: 'blue' });
+    }
+
+    const target = rows[0];
+    try {
+      const route_options = await this._prepareRouteOptionsForRow(target.row, { force: true });
+      frappe.route_options = {
+        ...route_options,
+        ...(route_options.render_data || {}),
+      };
+      frappe.set_route('barcode-studio', route_options.doctype || this.doc.doctype, route_options.name || this.doc.name, route_options.template || '');
+    } catch (error) {
+      console.error('Failed to open Barcode Studio', error);
+      frappe.msgprint(__('Unable to prepare Barcode Studio data.'));
+    }
   }
 };

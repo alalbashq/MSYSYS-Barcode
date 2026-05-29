@@ -1,6 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
+ "autoname": "field:template_name",
  "creation": "2025-09-28 00:24:45.133295",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -29,14 +30,15 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Template Name",
-   "reqd": 1
+   "reqd": 1,
+   "unique": 1
   },
   {
+   "description": "DocType whose fields are shown in Barcode Studio",
    "fieldname": "source_doctype",
    "fieldtype": "Link",
    "label": "Source DocType",
    "options": "DocType",
-   "description": "DocType whose fields are shown in Barcode Studio",
    "search_index": 1
   },
   {
@@ -107,10 +109,11 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-28 02:14:59.618761",
+ "modified": "2026-05-30 01:07:46.348330",
  "modified_by": "Administrator",
  "module": "MYSYS Barcode",
  "name": "Barcode Template",
+ "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
   {

@@ -26,6 +26,7 @@ export class BarcodeStudioCanvasController {
     this.gridVisible = false;
     this._suspendPreview = false;
     this._previewTicket = 0;
+    this._dropTargets = [];
 
     this.previewDebounced = frappe.utils?.debounce(() => {
       void this.preview();
@@ -33,7 +34,10 @@ export class BarcodeStudioCanvasController {
 
     this._boundKeydown = this._handleKeydown.bind(this);
     this._boundWheel = this._handleWheel.bind(this);
-    this._boundDragOver = (ev) => ev.preventDefault();
+    this._boundDragOver = (ev) => {
+      ev.preventDefault();
+      if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+    };
     this._boundDrop = this._handleDrop.bind(this);
   }
 
@@ -104,9 +108,13 @@ export class BarcodeStudioCanvasController {
   }
 
   destroy() {
+    for (const target of this._dropTargets || []) {
+      target.removeEventListener("dragenter", this._boundDragOver);
+      target.removeEventListener("dragover", this._boundDragOver);
+      target.removeEventListener("drop", this._boundDrop);
+    }
+    this._dropTargets = [];
     if (this.canvasEl) {
-      this.canvasEl.removeEventListener("dragover", this._boundDragOver);
-      this.canvasEl.removeEventListener("drop", this._boundDrop);
       this.canvasEl.removeEventListener("wheel", this._boundWheel);
     }
     document.removeEventListener("keydown", this._boundKeydown);
@@ -156,10 +164,25 @@ export class BarcodeStudioCanvasController {
       if (!this._suspendPreview) this.previewDebounced();
     });
 
-    this.canvasEl.addEventListener("dragover", this._boundDragOver);
-    this.canvasEl.addEventListener("drop", this._boundDrop);
+    this._bindDropTargets();
     this.canvasEl.addEventListener("wheel", this._boundWheel, { passive: false });
     document.addEventListener("keydown", this._boundKeydown);
+  }
+
+  _bindDropTargets() {
+    const targets = [
+      this.canvasEl,
+      this.fabricCanvas?.upperCanvasEl,
+      this.fabricCanvas?.wrapperEl,
+      document.getElementById("bs-canvas-wrap"),
+    ].filter(Boolean);
+
+    this._dropTargets = [...new Set(targets)];
+    for (const target of this._dropTargets) {
+      target.addEventListener("dragenter", this._boundDragOver);
+      target.addEventListener("dragover", this._boundDragOver);
+      target.addEventListener("drop", this._boundDrop);
+    }
   }
 
   _focusCanvas() {
@@ -169,22 +192,25 @@ export class BarcodeStudioCanvasController {
   _handleDrop(ev) {
     ev.preventDefault();
     if (!this.fabricCanvas) return;
-    const payload = safeJsonParse(ev.dataTransfer.getData("text/plain"), {});
-    const pointer = this.fabricCanvas.getPointer(ev);
+    const raw = ev.dataTransfer.getData("application/x-mysys-barcode-field")
+      || ev.dataTransfer.getData("text/plain");
+    const payload = safeJsonParse(raw, {});
+    if (!payload || !Object.keys(payload).length) return;
+    const pointer = this._getDropPointer(ev);
     this._chooseAddAs(payload, pointer.x, pointer.y);
   }
 
+  _getDropPointer(ev) {
+    const pointer = this.fabricCanvas.getPointer(ev);
+    return {
+      x: clamp(pointer.x, 0, Math.max(0, this.fabricCanvas.getWidth() - 20)),
+      y: clamp(pointer.y, 0, Math.max(0, this.fabricCanvas.getHeight() - 20)),
+    };
+  }
+
   _chooseAddAs(payload, x, y) {
-    const kind = String(payload?.kind || (payload?.fieldtype === "Barcode" ? "barcode" : "text")).toLowerCase();
-    const label = payload?.displayLabel || payload?.label || payload?.fieldLabel || payload?.fieldname || payload?.path || "Text";
-    const bindPath = payload?.path || payload?.fieldname || "";
-
-    if (kind === "barcode") {
-      this.addBarcodeAt(x, y, payload?.baseValue || payload?.value || label || bindPath || "123456789012", bindPath);
-      return;
-    }
-
-    this.addTextAt(x, y, label, bindPath);
+    const kind = this._resolveFieldKind(payload, this._normalizeFieldPayload(payload));
+    this.addFieldElement(payload, { x, y, kind });
   }
 
   _handleKeydown(ev) {
@@ -248,6 +274,104 @@ export class BarcodeStudioCanvasController {
     }
   }
 
+  _normalizeFieldPayload(payload = {}, fallbackLabel = "", fallbackBinding = "") {
+    const source = typeof payload === "string" ? { binding_key: payload } : (payload || {});
+    const bindingKey = source.binding_key || source.bindField || source.path || source.fieldname || fallbackBinding || "";
+    const childTable = source.child_table_field || source.parent_fieldname || null;
+    return {
+      label: source.displayLabel || source.label || source.fieldLabel || fallbackLabel || source.fieldname || bindingKey || "",
+      fieldname: source.fieldname || bindingKey || "",
+      binding_key: bindingKey,
+      source_level: source.source_level || source.scope || (childTable ? "Child Table" : "Document"),
+      child_table_field: childTable,
+      child_doctype: source.child_doctype || null,
+      fieldtype: source.fieldtype || "Data",
+      sample_value: source.sample_value || source.sampleValue || "",
+    };
+  }
+
+  _applyElementMetadata(obj, metadata) {
+    const clean = this._normalizeFieldPayload(metadata);
+    obj.set({
+      label: clean.label || "",
+      fieldname: clean.fieldname || "",
+      binding_key: clean.binding_key || "",
+      bindField: clean.binding_key || "",
+      source_level: clean.source_level || "Document",
+      child_table_field: clean.child_table_field || "",
+      child_doctype: clean.child_doctype || "",
+      fieldtype: clean.fieldtype || "",
+      sample_value: clean.sample_value || "",
+    });
+  }
+
+  _elementMetadataFromObject(obj) {
+    return {
+      label: obj.label || "",
+      fieldname: obj.fieldname || "",
+      binding_key: obj.binding_key || obj.bindField || "",
+      source_level: obj.source_level || "Document",
+      child_table_field: obj.child_table_field || "",
+      child_doctype: obj.child_doctype || "",
+      fieldtype: obj.fieldtype || "",
+      sample_value: obj.sample_value || "",
+    };
+  }
+
+  _elementMetadataFromItem(item) {
+    return this._normalizeFieldPayload({
+      label: item.label || item.baseText || item.text || item.baseBarcodeValue || item.barcodeValue || "",
+      fieldname: item.fieldname || item.bindField || "",
+      binding_key: item.binding_key || item.bindField || item.fieldname || "",
+      source_level: item.source_level || "Document",
+      child_table_field: item.child_table_field || "",
+      child_doctype: item.child_doctype || "",
+      fieldtype: item.fieldtype || "",
+      sample_value: item.sample_value || "",
+    });
+  }
+
+  _designText(metadata, fallback = "Text") {
+    return metadata.label || metadata.fieldname || metadata.binding_key || fallback;
+  }
+
+  _isBarcodeMetadata(metadata = {}) {
+    const fieldtype = String(metadata.fieldtype || "").toLowerCase();
+    const fieldname = String(metadata.fieldname || "").toLowerCase();
+    const bindingKey = String(metadata.binding_key || metadata.bindField || metadata.path || "").toLowerCase();
+    const label = String(metadata.label || metadata.displayLabel || "").toLowerCase();
+    const bindingParts = bindingKey.split("_").filter(Boolean);
+    return (
+      fieldtype === "barcode" ||
+      fieldname === "barcode" ||
+      label === "barcode" ||
+      bindingParts[bindingParts.length - 1] === "barcode"
+    );
+  }
+
+  _resolveFieldKind(payload = {}, metadata = {}) {
+    const explicit = String(payload?.kind || "").toLowerCase();
+    if (explicit === "barcode" || explicit === "text") return explicit;
+    return this._isBarcodeMetadata(metadata) ? "barcode" : "text";
+  }
+
+  addFieldElement(payload, options = {}) {
+    const metadata = this._normalizeFieldPayload(payload);
+    const kind = this._resolveFieldKind({ ...payload, kind: options.kind || payload?.kind }, metadata);
+    const x = options.x ?? 20;
+    const y = options.y ?? 20;
+
+    if (kind === "barcode") {
+      const renderData = this.page.getRenderData();
+      const renderedValue = metadata.binding_key ? renderData?.[metadata.binding_key] : null;
+      const value = renderedValue || metadata.sample_value || metadata.binding_key || metadata.label || "123456789012";
+      this.addBarcodeAt(x, y, value, metadata);
+      return;
+    }
+
+    this.addTextAt(x, y, this._designText(metadata), metadata);
+  }
+
   _cloneFabricObject(obj) {
     return new Promise((resolve) => {
       if (!obj?.clone) {
@@ -258,6 +382,14 @@ export class BarcodeStudioCanvasController {
         "baseText",
         "baseBarcodeValue",
         "bindField",
+        "binding_key",
+        "label",
+        "fieldname",
+        "source_level",
+        "child_table_field",
+        "child_doctype",
+        "fieldtype",
+        "sample_value",
         "customType",
         "barcodeValue",
         "format",
@@ -292,28 +424,25 @@ export class BarcodeStudioCanvasController {
       selection: false,
     });
 
-    const data = this.page.resolveDoc();
-
     for (const source of this.fabricCanvas.getObjects()) {
       const clone = await this._cloneFabricObject(source);
       if (!clone) continue;
 
       if (clone.isType?.("textbox")) {
         const baseText = source.baseText ?? source.text ?? "";
-        const resolved = source.bindField ? this._getByPath(data, source.bindField) : undefined;
-        const nextText = resolved === undefined || resolved === null ? baseText : this._toStr(resolved);
+        const nextText = this.page.getElementDisplayValue(source, "preview");
         clone.set("text", nextText);
         clone.baseText = baseText;
       } else if (source.customType === "barcode") {
         const baseValue = source.baseBarcodeValue ?? source.barcodeValue ?? "";
-        const resolved = source.bindField ? this._getByPath(data, source.bindField) : undefined;
-        const nextValue = resolved === undefined || resolved === null ? baseValue : this._toStr(resolved);
+        const nextValue = this.page.getElementDisplayValue(source, "preview");
         const boxWidth = source.boxWidth || source.getScaledWidth() || source.width || 0;
         const boxHeight = source.boxHeight || source.getScaledHeight() || source.height || 0;
         clone.set({
           barcodeValue: nextValue,
           baseBarcodeValue: baseValue,
-          bindField: source.bindField || "",
+          bindField: source.binding_key || source.bindField || "",
+          binding_key: source.binding_key || source.bindField || "",
           customType: "barcode",
           format: source.format || "CODE128",
           barWidth: source.barWidth || 2,
@@ -362,23 +491,6 @@ export class BarcodeStudioCanvasController {
     } catch {
       return `${value}`;
     }
-  }
-
-  _getByPath(obj, path) {
-    if (!obj || !path) return undefined;
-    const normalizedPath = String(path).replace(/\[\]/g, "[0]");
-    const segments = normalizedPath.replace(/\[(\d*)\]/g, ".$1").split(".").filter(Boolean);
-    let current = obj;
-    for (const segment of segments) {
-      if (Array.isArray(current)) {
-        const idx = segment === "" ? 0 : Number.parseInt(segment, 10);
-        current = current?.[idx];
-      } else {
-        current = current?.[segment];
-      }
-      if (current === undefined || current === null) break;
-    }
-    return current;
   }
 
   _barcodeDataURL(value, format, width, height, displayValue, margins = { mt: 0, mr: 0, mb: 0, ml: 0 }) {
@@ -533,8 +645,9 @@ export class BarcodeStudioCanvasController {
     if (type === "barcode") this.addBarcodeAt(20, 20, "123456789012", "");
   }
 
-  addTextAt(x, y, text, bindPath = "") {
+  addTextAt(x, y, text, metadataInput = "") {
     if (!this.fabricCanvas) return;
+    const metadata = this._normalizeFieldPayload(metadataInput, text, typeof metadataInput === "string" ? metadataInput : "");
     const baseText = text || "Text";
     const obj = new fabric.Textbox(baseText, {
       left: x,
@@ -543,16 +656,17 @@ export class BarcodeStudioCanvasController {
       padding: 2,
       textAlign: "left",
       customType: "text",
-      bindField: bindPath || "",
       baseText,
     });
+    this._applyElementMetadata(obj, metadata);
     this.fabricCanvas.add(obj).setActiveObject(obj);
     this.renderProps(obj);
     if (!this._suspendPreview) this.previewDebounced();
   }
 
-  addBarcodeAt(x, y, value, bindPath = "") {
+  addBarcodeAt(x, y, value, metadataInput = "") {
     if (!this.fabricCanvas) return;
+    const metadata = this._normalizeFieldPayload(metadataInput, value, typeof metadataInput === "string" ? metadataInput : "");
     const baseValue = value || "123456789012";
     const format = "CODE128";
     const barWidth = 2;
@@ -580,8 +694,8 @@ export class BarcodeStudioCanvasController {
         marginRight: 0,
         marginBottom: 0,
         marginLeft: 0,
-        bindField: bindPath || "",
       });
+      this._applyElementMetadata(img, metadata);
       img.boxWidth = img.getScaledWidth();
       img.boxHeight = img.getScaledHeight();
       img._barcodeSignature = this._barcodeSignature(img);
@@ -603,6 +717,7 @@ export class BarcodeStudioCanvasController {
   clearActiveValue() {
     const obj = this.fabricCanvas?.getActiveObject();
     if (!obj) return;
+    if (obj.binding_key) return;
 
     if (obj.isType?.("textbox")) {
       obj.baseText = "";
@@ -656,8 +771,10 @@ export class BarcodeStudioCanvasController {
     const items = Array.isArray(layout) ? layout : [];
 
     for (const item of items) {
-      if (item.type === "textbox") {
-        const baseText = item.baseText ?? item.text ?? "";
+      const metadata = this._elementMetadataFromItem(item);
+      if (item.type === "textbox" && !this._isBarcodeMetadata(metadata)) {
+        const hasBinding = !!metadata.binding_key;
+        const baseText = hasBinding ? this._designText(metadata, item.baseText ?? item.text ?? "") : (item.baseText ?? item.text ?? "");
         const obj = new fabric.Textbox(baseText, Object.assign({}, item, {
           left: this._layoutValuePx(item, "left", 0),
           top: this._layoutValuePx(item, "top", 0),
@@ -665,12 +782,19 @@ export class BarcodeStudioCanvasController {
           fontSize: this._layoutValuePx(item, "fontSize", 12),
           text: baseText,
           customType: "text",
-          bindField: item.bindField || "",
           baseText,
         }));
+        this._applyElementMetadata(obj, metadata);
         this.fabricCanvas.add(obj);
-      } else if (item.type === "image" && (item.barcodeValue || item.src || item.customType === "barcode")) {
-        const baseValue = item.baseBarcodeValue ?? item.barcodeValue ?? "";
+      } else if (
+        this._isBarcodeMetadata(metadata)
+        || (item.type === "image" && (item.barcodeValue || item.src || item.customType === "barcode"))
+      ) {
+        const hasBinding = !!metadata.binding_key;
+        const renderedValue = hasBinding ? this.page.getRenderData()?.[metadata.binding_key] : "";
+        const baseValue = hasBinding
+          ? (renderedValue || metadata.sample_value || item.baseBarcodeValue || item.barcodeValue || item.baseText || item.text || metadata.label || metadata.binding_key || "123456789012")
+          : (item.baseBarcodeValue ?? item.barcodeValue ?? item.baseText ?? item.text ?? "");
         const url = this._barcodeDataURL(
           baseValue || " ",
           item.format || "CODE128",
@@ -689,8 +813,8 @@ export class BarcodeStudioCanvasController {
         img.set(Object.assign({}, item, {
           left: this._layoutValuePx(item, "left", item.left || 0),
           top: this._layoutValuePx(item, "top", item.top || 0),
+          type: "image",
           customType: "barcode",
-          bindField: item.bindField || "",
           barcodeValue: baseValue,
           baseBarcodeValue: baseValue,
           barWidth: this._layoutValuePx(item, "barWidth", 2),
@@ -700,6 +824,7 @@ export class BarcodeStudioCanvasController {
           marginBottom: this._layoutValuePx(item, "marginBottom", 0),
           marginLeft: this._layoutValuePx(item, "marginLeft", 0),
         }));
+        this._applyElementMetadata(img, metadata);
         img.boxWidth = this._layoutValuePx(item, "boxWidth", item.width || img.getScaledWidth());
         img.boxHeight = this._layoutValuePx(item, "boxHeight", item.height || img.getScaledHeight());
         this._fitImageToBox(img, img.boxWidth, img.boxHeight);
@@ -718,6 +843,7 @@ export class BarcodeStudioCanvasController {
     const top = toNumber(obj.top, 0);
     const width = toNumber(obj.getScaledWidth?.() ?? obj.width ?? 0, 0);
     const height = toNumber(obj.getScaledHeight?.() ?? obj.height ?? 0, 0);
+    const metadata = this._elementMetadataFromObject(obj);
     const base = {
       type: obj.type,
       left,
@@ -728,7 +854,8 @@ export class BarcodeStudioCanvasController {
       top_mm: this._pxToMm(top),
       width_mm: this._pxToMm(width),
       height_mm: this._pxToMm(height),
-      bindField: obj.bindField || "",
+      ...metadata,
+      bindField: metadata.binding_key || "",
     };
 
     if (obj.isType?.("textbox")) {
@@ -803,7 +930,7 @@ export class BarcodeStudioCanvasController {
     this._syncPreviewPane(imageData);
   }
 
-  _buildLabelMarkup(objects = this.fabricCanvas?.getObjects() || [], data = this.page.resolveDoc() || {}) {
+  _buildLabelMarkup(objects = this.fabricCanvas?.getObjects() || []) {
     const parts = [];
 
     for (const obj of objects) {
@@ -815,9 +942,7 @@ export class BarcodeStudioCanvasController {
       const heightMM = this._pxToMm(heightPx).toFixed(3);
 
       if (obj.isType?.("textbox")) {
-        const baseText = obj.baseText ?? obj.text ?? "";
-        const resolved = obj.bindField ? this._getByPath(data, obj.bindField) : undefined;
-        const text = escapeHtml(resolved === undefined || resolved === null ? baseText : this._toStr(resolved));
+        const text = escapeHtml(this.page.getElementDisplayValue(obj, "print"));
         const fontSizeMM = this._pxToMm(obj.fontSize || 12).toFixed(3);
         const fontFamily = escapeHtml(obj.fontFamily || "Times New Roman");
         const fontWeight = escapeHtml(obj.fontWeight || "normal");
@@ -830,9 +955,7 @@ export class BarcodeStudioCanvasController {
           `${text}</div>`
         );
       } else if (obj.customType === "barcode") {
-        const baseValue = obj.baseBarcodeValue ?? obj.barcodeValue ?? "";
-        const resolved = obj.bindField ? this._getByPath(data, obj.bindField) : undefined;
-        const value = escapeHtml(resolved === undefined || resolved === null ? baseValue : this._toStr(resolved) || " ");
+        const value = this.page.getElementDisplayValue(obj, "print") || " ";
         const format = obj.format || "CODE128";
         const barWidth = Math.max(1, Math.round(toNumber(obj.barWidth, 2)));
         const barHeight = Math.max(1, Math.round(toNumber(obj.barHeight, 60)));
@@ -863,10 +986,10 @@ export class BarcodeStudioCanvasController {
     return parts.join("");
   }
 
-  _buildSheetMarkup(data = this.page.resolveDoc() || {}) {
+  _buildSheetMarkup() {
     const widthMM = this.pageWidthMM;
     const heightMM = this.pageHeightMM;
-    return `<div class="bs-print-sheet" style="width:${widthMM}mm;height:${heightMM}mm;">${this._buildLabelMarkup(undefined, data)}</div>`;
+    return `<div class="bs-print-sheet" style="width:${widthMM}mm;height:${heightMM}mm;">${this._buildLabelMarkup()}</div>`;
   }
 
   _buildPreviewMarkup(imageData) {
@@ -886,23 +1009,13 @@ export class BarcodeStudioCanvasController {
   }
 
   _resolvePrintPayload(copies, templateName) {
-    const data = this.page.resolveDoc() || {};
-    const parentDoctype = data.doctype || this.page.doctype;
-    const parentName = data.name || this.page.docname;
-    const childField = data.__child_field || null;
-    const childRows = [];
-
-    if (childField && Array.isArray(data[childField])) {
-      for (const row of data[childField]) {
-        if (row?.name) childRows.push(row.name);
-      }
-    }
+    const context = this.page.getStudioContext();
 
     return {
-      parent_doctype: parentDoctype,
-      parent_name: parentName,
-      child_field: childField,
-      child_row_names: JSON.stringify(childRows),
+      parent_doctype: context.doctype || this.page.doctype,
+      parent_name: context.name || this.page.docname,
+      child_field: null,
+      child_row_names: "[]",
       copies,
       template_name: templateName || null,
     };
@@ -1034,28 +1147,28 @@ export class BarcodeStudioCanvasController {
     const unitDigits = this.page.getDimensionConfig(unit).digits;
     const pxToUnit = (px) => this.page.mmToUnit(this._pxToMm(px), unit);
     const unitToPx = (value) => this._mmToPx(this.page.unitToMm(value, unit));
-
-    const bindRow = () => $(`
-      <div class="form-group mb-1">
-        <label class="small text-muted">Bind Path</label>
-        <input
-          class="form-control form-control-sm"
-          name="bindField"
-          value="${escapeHtml(obj.bindField || "")}"
-          placeholder="e.g. item_code or items[0].item_name or items[].rate"
-        />
-        <small class="text-muted">Supports child paths. Leave empty for static.</small>
-      </div>
-    `);
+    const hasBinding = !!(obj.binding_key || obj.bindField);
+    const bindingRows = [
+      ["Label", "label", obj.label || ""],
+      ["Field", "fieldname", obj.fieldname || ""],
+      ["Binding Key", "binding_key", obj.binding_key || obj.bindField || ""],
+      ["Source Level", "source_level", obj.source_level || ""],
+      ["Child Table", "child_table_field", obj.child_table_field || ""],
+      ["Child DocType", "child_doctype", obj.child_doctype || ""],
+      ["Field Type", "fieldtype", obj.fieldtype || ""],
+    ];
 
     $panel.append(this._makeFieldRow(`Left (${unitLabel})`, "left", pxToUnit(obj.left || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
     $panel.append(this._makeFieldRow(`Top (${unitLabel})`, "top", pxToUnit(obj.top || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
-    $panel.append(bindRow());
+    for (const [label, name, value] of bindingRows) {
+      if (!value && !hasBinding) continue;
+      $panel.append(this._makeFieldRow(label, name, value, "text", { readonly: true }));
+    }
     $panel.append(this._makeFieldRow(`Width (${unitLabel})`, "width", this.page.mmToUnit(this._currentObjectWidthMm(obj), unit).toFixed(unitDigits), "number", { readonly: true }));
     $panel.append(this._makeFieldRow(`Height (${unitLabel})`, "height", this.page.mmToUnit(this._currentObjectHeightMm(obj), unit).toFixed(unitDigits), "number", { readonly: true }));
 
     if (obj.isType?.("textbox")) {
-      $panel.append(this._makeFieldRow("Text", "text", obj.baseText ?? obj.text ?? "", "text"));
+      $panel.append(this._makeFieldRow("Text", "text", obj.baseText ?? obj.text ?? "", "text", { readonly: hasBinding }));
       $panel.append(this._makeFieldRow(`Font Size (${unitLabel})`, "fontSize", pxToUnit(obj.fontSize || 12).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
       $panel.append(this._makeSelectRow("Text Align", "textAlign", obj.textAlign || "left", [
         { value: "left", label: "left" },
@@ -1064,8 +1177,8 @@ export class BarcodeStudioCanvasController {
         { value: "justify", label: "justify" },
       ]));
     } else if (obj.customType === "barcode") {
-      $panel.append(this._makeFieldRow("Value", "barcodeValue", obj.baseBarcodeValue ?? obj.barcodeValue ?? "", "text"));
-      $panel.append(this._makeFieldRow("Format", "format", obj.format || "CODE128", "text"));
+      $panel.append(this._makeFieldRow("Value", "barcodeValue", obj.baseBarcodeValue ?? obj.barcodeValue ?? "", "text", { readonly: hasBinding }));
+      $panel.append(this._makeFieldRow("Barcode Format", "format", obj.format || "CODE128", "text"));
       $panel.append(this._makeFieldRow(`Bar Width (${unitLabel})`, "barWidth", pxToUnit(obj.barWidth || 2).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
       $panel.append(this._makeFieldRow(`Bar Height (${unitLabel})`, "barHeight", pxToUnit(obj.barHeight || 60).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
       $panel.append(this._makeFieldRow(`Margin Top (${unitLabel})`, "marginTop", pxToUnit(obj.marginTop || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
@@ -1079,6 +1192,10 @@ export class BarcodeStudioCanvasController {
     }
 
     const updateObject = (name, rawValue) => {
+      const readonlyNames = ["label", "fieldname", "binding_key", "source_level", "child_table_field", "child_doctype", "fieldtype"];
+      if (readonlyNames.includes(name)) return;
+      if ((name === "text" || name === "barcodeValue") && hasBinding) return;
+
       let value = rawValue;
       if (name === "displayValue") value = rawValue === "1";
       const unitNames = ["left", "top", "fontSize", "barWidth", "barHeight", "marginTop", "marginRight", "marginBottom", "marginLeft"];
@@ -1099,15 +1216,6 @@ export class BarcodeStudioCanvasController {
       }
       if (name === "barcodeValue") {
         obj.baseBarcodeValue = value;
-      }
-      if (name === "bindField" && !value) {
-        if (obj.isType?.("textbox")) {
-          obj.set("text", obj.baseText ?? "");
-        } else if (obj.customType === "barcode") {
-          obj.set("barcodeValue", obj.baseBarcodeValue ?? "");
-          obj._barcodeSignature = null;
-          void this._refreshBarcodeObject(obj);
-        }
       }
 
       if (obj.customType === "barcode" && [

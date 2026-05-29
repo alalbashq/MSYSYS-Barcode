@@ -1,7 +1,6 @@
 <div class="qbp pro">
-  <!-- App Bar -->
   <header class="qbp-appbar">
-    <div class="left">
+    <div class="qbp-titleblock">
       <div class="title">
         <i class="fa fa-receipt"></i>
         <span>{{ doc.doctype }} — {{ doc.name }}</span>
@@ -14,15 +13,20 @@
         <span>{{ __("Company") }}:</span> {{ doc.company }}
       </div>
     </div>
-    <div class="right">
-      <select id="qbp-template" class="form-control form-control-sm" title="Template">اختار قالب</select>
-      <button id="qbp-print" class="btn btn-primary btn-sm"><i class="fa fa-print"></i> {{ __("Print") }}</button>
-      <button id="qbp-open-studio" class="btn btn-outline-secondary btn-sm"><i class="fa fa-pen-ruler"></i> {{ __("Studio") }}</button>
+    <div class="qbp-toolbar">
+      <div class="qbp-template-control">
+        <label for="qbp-template">{{ __("Template") }}</label>
+        <select id="qbp-template" class="form-control form-control-sm" title="Template">اختار قالب</select>
+      </div>
+      <div class="qbp-toolbar-actions">
+        <div id="qbp-toolbar-extra" class="qbp-toolbar-extra"></div>
+        <button id="qbp-print" class="btn btn-primary btn-sm"><i class="fa fa-print"></i> {{ __("Print") }}</button>
+        <button id="qbp-open-studio" class="btn btn-outline-secondary btn-sm"><i class="fa fa-pen-ruler"></i> {{ __("Studio") }}</button>
+      </div>
     </div>
   </header>
 
   <main class="qbp-main">
-    <!-- Left Panel -->
     <aside class="qbp-panel">
       <div class="acc">
         <button class="acc-head" data-acc="doc">{{ __("Document") }}</button>
@@ -80,7 +84,6 @@
       </div>
     </aside>
 
-    <!-- Items + Preview Dock -->
     <section class="qbp-work">
       <div class="card items">
         <div class="card-header">
@@ -99,6 +102,7 @@
                   <th style="width:80px">{{ __("Qty") }}</th>
                   <th style="min-width:360px">{{ __("Barcodes") }}</th>
                   <th style="width:160px">{{ __("Label Copies") }}</th>
+                  <th style="width:120px">{{ __("Action") }}</th>
                 </tr>
               </thead>
               <tbody id="qbp-items-body">
@@ -109,7 +113,7 @@
                     <div class="item-name">{{ r.item_name || r.item_code }}</div>
                     <div class="muted">{{ r.item_code }}</div>
                   </td>
-                  <td>{{ r.qty || r.stock_qty || 1 }}</td>
+                  <td><span class="qbp-qty">{{ r.qty || r.stock_qty || 1 }}</span></td>
                   <td>
                     <div class="pills" data-cdn="{{ r.name }}"></div>
                     <div class="bc-row">
@@ -121,10 +125,15 @@
                     </div>
                   </td>
                   <td><input type="number" class="form-control form-control-sm row-copies" min="1" value="{{ r.qty || 1 }}" data-cdn="{{ r.name }}"/></td>
+                  <td>
+                    <button class="btn btn-sm btn-outline-primary qbp-row-studio" data-cdn="{{ r.name }}">
+                      <i class="fa fa-print"></i> {{ __("Studio") }}
+                    </button>
+                  </td>
                 </tr>
                 {% } %}
                 {% if (!items || items.length===0) { %}
-                <tr><td colspan="5" class="text-center text-muted p-4">{{ __("No items") }}</td></tr>
+                <tr><td colspan="6" class="text-center text-muted p-4">{{ __("No items") }}</td></tr>
                 {% } %}
               </tbody>
             </table>
@@ -132,7 +141,6 @@
         </div>
       </div>
 
-      <!-- Preview Dock (Resizable) -->
       <div class="qbp-dock" id="qbp-dock">
         <div class="grip" id="qbp-grip"></div>
         <div class="dock-body">

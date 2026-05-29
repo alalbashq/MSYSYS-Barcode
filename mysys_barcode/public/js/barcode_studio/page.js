@@ -3,14 +3,12 @@ import {
   BARCODE_STUDIO_DEFAULT_UNIT,
   BARCODE_STUDIO_DEFAULT_WIDTH_MM,
   BARCODE_STUDIO_DIMENSION_UNITS,
-  BARCODE_STUDIO_FIELD_TYPES,
   BARCODE_STUDIO_UI_KEY,
 } from "./common.js";
 import {
   clamp,
   escapeHtml,
   getRouteState,
-  normalizeCtx,
   safeJsonParse,
   toNumber,
 } from "./common.js";
@@ -31,24 +29,28 @@ export class BarcodeStudioPage {
   constructor(wrapper) {
     this.wrapper = wrapper;
     const route = getRouteState();
-    this.doctype = route.doctype;
-    this.docname = route.docname;
-    this.templateName = route.templateName;
+    this.studioContext = this._readStudioContext(route);
+    this.doctype = this.studioContext.doctype || route.doctype || "Item";
+    this.docname = this.studioContext.name || route.docname || "";
+    this.templateName = this.studioContext.template || route.templateName;
+    this.selectedBarcodeDoctype = this.studioContext.barcode_doctype || null;
     this.pageWidthMM = BARCODE_STUDIO_DEFAULT_WIDTH_MM;
     this.pageHeightMM = BARCODE_STUDIO_DEFAULT_HEIGHT_MM;
     this.scale = 1;
     this.snapMM = 1;
     this.gridVisible = false;
     this.meta = null;
+    this.barcodeConfig = null;
+    this.configMessage = "";
     this.fields = [];
     this.childFieldGroups = {};
     this.templateDesignFields = [];
     this.templateSourceDoctype = "";
     this.doc = null;
-    this.docFromRoute = normalizeCtx(this._parseCtxFromRoute() || this._parseCtxFromRouteOptions());
     this.state = new BarcodeStudioStateStore();
     this.dimensionUnit = this.state.get("unit", BARCODE_STUDIO_DEFAULT_UNIT);
     this._loadToken = 0;
+    this._warnedBindings = new Set();
     this.canvas = new BarcodeStudioCanvasController(this);
     this.canvasClearButton = null;
 
@@ -124,50 +126,108 @@ export class BarcodeStudioPage {
   }
 
   resolveDoc() {
-    return this.docFromRoute || this.doc || null;
+    return this.getRenderData();
   }
 
-  _parseCtxFromRoute() {
-    try {
-      const sources = [window.location.hash || "", window.location.search || ""];
-      for (const source of sources) {
-        const qIndex = source.indexOf("?");
-        if (qIndex === -1) continue;
-        const params = new URLSearchParams(source.slice(qIndex + 1));
-        if (!params.has("ctx")) continue;
-        const raw = decodeURIComponent(params.get("ctx") || "");
-        try {
-          return JSON.parse(raw);
-        } catch {
-          try {
-            return JSON.parse(atob(raw));
-          } catch {
-            continue;
-          }
-        }
-      }
-    } catch {
-      return null;
+  getStudioContext() {
+    return this.studioContext || {};
+  }
+
+  getRenderData() {
+    const data = this.studioContext?.render_data;
+    return data && typeof data === "object" ? data : {};
+  }
+
+  getAllowedBindingKeys() {
+    return new Set((this.fields || []).map((field) => field.binding_key || field.fieldname).filter(Boolean));
+  }
+
+  isBindingAllowed(bindingKey) {
+    if (!bindingKey) return true;
+    return this.getAllowedBindingKeys().has(bindingKey);
+  }
+
+  getElementDisplayValue(element, mode = "design") {
+    const key = element?.binding_key || element?.bindField || element?.fieldname || "";
+    const label = element?.label || element?.baseText || element?.text || element?.fieldname || key || "";
+
+    if (mode === "design") {
+      return label;
     }
-    return null;
+
+    if (!key) {
+      return element?.baseBarcodeValue ?? element?.barcodeValue ?? element?.baseText ?? element?.text ?? label;
+    }
+
+    if (!this.isBindingAllowed(key)) {
+      this._warnUnauthorizedBinding(key);
+      return "";
+    }
+
+    const renderData = this.getRenderData();
+    if (renderData && renderData[key] !== undefined && renderData[key] !== null) {
+      return String(renderData[key]);
+    }
+
+    if (element?.sample_value) {
+      return String(element.sample_value);
+    }
+
+    return label;
   }
 
-  _parseCtxFromRouteOptions() {
+  _warnUnauthorizedBinding(bindingKey) {
+    if (!bindingKey || this._warnedBindings.has(bindingKey)) return;
+    this._warnedBindings.add(bindingKey);
+    console.warn(`Barcode Studio ignored unauthorized binding_key: ${bindingKey}`);
+  }
+
+  _readStudioContext(route = getRouteState()) {
     try {
       const routeOptions = frappe.route_options || {};
-      if (!routeOptions.ctx) return null;
-      if (typeof routeOptions.ctx === "string") {
-        try {
-          return JSON.parse(routeOptions.ctx);
-        } catch {
-          return null;
-        }
-      }
-      if (typeof routeOptions.ctx === "object") return routeOptions.ctx;
-      return null;
+      const hasRenderData = routeOptions.render_data && typeof routeOptions.render_data === "object";
+      return {
+        doctype: routeOptions.doctype || route.doctype || null,
+        name: routeOptions.name || routeOptions.docname || route.docname || "",
+        template: routeOptions.template || route.templateName || null,
+        barcode_doctype: routeOptions.barcode_doctype || null,
+        render_data: hasRenderData ? routeOptions.render_data : this._flatRouteOptions(routeOptions),
+      };
     } catch {
-      return null;
+      return {
+        doctype: route.doctype || null,
+        name: route.docname || "",
+        template: route.templateName || null,
+        barcode_doctype: null,
+        render_data: {},
+      };
     }
+  }
+
+  _flatRouteOptions(routeOptions) {
+    if (!routeOptions || typeof routeOptions !== "object") return {};
+    const out = {};
+    for (const [key, value] of Object.entries(routeOptions)) {
+      if (key === "render_data") continue;
+      if (value === null || value === undefined) continue;
+      if (typeof value === "object") continue;
+      out[key] = value;
+    }
+    return out;
+  }
+
+  isBarcodeField(field = {}) {
+    const fieldtype = String(field.fieldtype || "").toLowerCase();
+    const fieldname = String(field.fieldname || "").toLowerCase();
+    const bindingKey = String(field.binding_key || field.path || field.fieldname || "").toLowerCase();
+    const label = String(field.label || field.displayLabel || "").toLowerCase();
+    const bindingParts = bindingKey.split("_").filter(Boolean);
+    return (
+      fieldtype === "barcode" ||
+      fieldname === "barcode" ||
+      label === "barcode" ||
+      bindingParts[bindingParts.length - 1] === "barcode"
+    );
   }
 
   initPage() {
@@ -266,6 +326,11 @@ export class BarcodeStudioPage {
 
     $("#bs-template").on("change", (event) => {
       const templateName = event.target.value || "";
+      this.templateName = templateName || null;
+      this.studioContext.template = this.templateName;
+      if (frappe.route_options) {
+        frappe.route_options.template = this.templateName;
+      }
       frappe.set_route("barcode-studio", this.doctype, this.docname || "", templateName || "");
     });
 
@@ -355,7 +420,7 @@ export class BarcodeStudioPage {
     this.templateDesignFields = [];
     this.templateSourceDoctype = "";
 
-    await this.loadMetaAndDoc();
+    await this.loadBarcodeConfig();
     if (token !== this._loadToken) return;
 
     await this.fillTemplates();
@@ -377,94 +442,63 @@ export class BarcodeStudioPage {
 
   async onRoute() {
     const route = getRouteState();
-    const ctx = normalizeCtx(this._parseCtxFromRoute() || this._parseCtxFromRouteOptions());
-    const changed = route.doctype !== this.doctype || route.docname !== this.docname || route.templateName !== this.templateName || !!ctx;
+    const context = this._readStudioContext(route);
+    const changed = (
+      context.doctype !== this.doctype ||
+      context.name !== this.docname ||
+      context.template !== this.templateName ||
+      context.barcode_doctype !== this.selectedBarcodeDoctype ||
+      Object.keys(context.render_data || {}).length
+    );
     if (!changed) return;
 
-    this.doctype = route.doctype;
-    this.docname = route.docname;
-    this.templateName = route.templateName;
-    this.docFromRoute = ctx;
+    this.studioContext = context;
+    this.doctype = context.doctype || route.doctype || "Item";
+    this.docname = context.name || route.docname || "";
+    this.templateName = context.template || route.templateName;
+    this.selectedBarcodeDoctype = context.barcode_doctype || null;
     $("#bs-dt").val(this.doctype);
     $("#bs-name").val(this.docname);
     void this.bootstrap();
   }
 
-  async _withDoctype(doctype) {
-    return new Promise((resolve) => {
-      frappe.model.with_doctype(doctype, () => resolve());
-    });
-  }
-
-  async loadMetaAndDoc() {
+  async loadBarcodeConfig() {
+    const previousContext = this.studioContext || {};
     this.doctype = ($("#bs-dt").val() || this.doctype || "Item").trim();
     this.docname = ($("#bs-name").val() || this.docname || "").trim();
-
-    this.fields = [];
-    this.childFieldGroups = {};
-
-    try {
-      await this._withDoctype(this.doctype);
-      this.meta = frappe.get_meta(this.doctype);
-
-      this.fields = (this.meta.fields || [])
-        .filter((df) => BARCODE_STUDIO_FIELD_TYPES.has(df.fieldtype))
-        .map((df) => ({
-          label: df.label || df.fieldname,
-          fieldname: df.fieldname,
-          fieldtype: df.fieldtype,
-        }));
-
-      if (!this.fields.find((field) => field.fieldname === "name")) {
-        this.fields.unshift({ label: "name", fieldname: "name", fieldtype: "Data" });
-      }
-
-      const childTables = (this.meta.fields || []).filter((df) => df.fieldtype === "Table");
-      for (const ct of childTables) {
-        if (!ct.options) continue;
-        await this._withDoctype(ct.options);
-        const childMeta = frappe.get_meta(ct.options);
-        const childFields = (childMeta.fields || [])
-          .filter((df) => BARCODE_STUDIO_FIELD_TYPES.has(df.fieldtype))
-          .map((df) => ({
-            label: `${ct.label || ct.fieldname} › ${df.label || df.fieldname}`,
-            fieldname: `${ct.fieldname}.${df.fieldname}`,
-            fieldname_indexed: `${ct.fieldname}[].${df.fieldname}`,
-            fieldtype: df.fieldtype,
-            child_table: ct.fieldname,
-          }));
-        this.childFieldGroups[ct.fieldname] = {
-          child_dt: ct.options,
-          fields: childFields,
-        };
-      }
-    } catch (error) {
-      console.error("Failed to load meta/doc", error);
-      this.meta = null;
+    const sameSource = previousContext.doctype === this.doctype && (previousContext.name || "") === this.docname;
+    if (previousContext.doctype && previousContext.doctype !== this.doctype) {
+      this.selectedBarcodeDoctype = null;
     }
 
-    const routeDoc = this.docFromRoute && typeof this.docFromRoute === "object" ? this.docFromRoute : null;
-    const canUseRouteDoc = routeDoc && (
-      !routeDoc.doctype || routeDoc.doctype === this.doctype
-    ) && (
-      !routeDoc.name || routeDoc.name === this.docname || !this.docname
-    );
+    this.studioContext = {
+      ...previousContext,
+      doctype: this.doctype,
+      name: this.docname,
+      template: this.templateName || null,
+      barcode_doctype: this.selectedBarcodeDoctype || null,
+      render_data: sameSource ? this.getRenderData() : {},
+    };
+    this.fields = [];
+    this.childFieldGroups = {};
+    this.barcodeConfig = null;
+    this.configMessage = "";
 
-    if (canUseRouteDoc) {
-      this.doc = routeDoc;
-    } else if (this.docname) {
-      try {
-        const response = await frappe.call({
-          method: "frappe.client.get",
-          args: { doctype: this.doctype, name: this.docname },
-        });
-        this.doc = response.message || null;
-      } catch (error) {
-        console.error("Failed to load document", error);
-        this.doc = null;
-      }
-    } else {
-      this.doc = null;
+    try {
+      const response = await frappe.call({
+        method: "mysys_barcode.api.get_barcode_doctype_config",
+        args: {
+          target_doctype: this.doctype,
+          barcode_doctype: this.selectedBarcodeDoctype || null,
+        },
+      });
+      this.barcodeConfig = response.message || null;
+      this.selectedBarcodeDoctype = this.barcodeConfig?.name || this.selectedBarcodeDoctype || null;
+      this.fields = Array.isArray(this.barcodeConfig?.fields) ? this.barcodeConfig.fields : [];
+      this.studioContext.barcode_doctype = this.selectedBarcodeDoctype;
+    } catch (error) {
+      console.warn("Failed to load Barcode DocType configuration", error);
+      this.configMessage = __("No Barcode DocType configuration found for this DocType. Please create one first.");
     }
   }
 
@@ -493,6 +527,12 @@ export class BarcodeStudioPage {
     const saved = safeJsonParse(localStorage.getItem(uiKey), {});
     const forceOpen = !!query;
 
+    if (this.configMessage) {
+      $panel.html(`<div class="text-muted small">${escapeHtml(this.configMessage)}</div>`);
+      $("#bs-fields-collapse-toggle").text("Expand All");
+      return;
+    }
+
     const makeChip = (label, dataset, pathShown) => {
       const chip = $(`
         <div class="bs-field-chip" draggable="true" title="${escapeHtml(pathShown || dataset.path || "")}">
@@ -501,10 +541,24 @@ export class BarcodeStudioPage {
         </div>
       `);
       chip.on("dragstart", (event) => {
-        event.originalEvent.dataTransfer.setData("text/plain", JSON.stringify(dataset));
+        const dataTransfer = event.originalEvent.dataTransfer;
+        const payload = JSON.stringify(dataset);
+        dataTransfer.effectAllowed = "copy";
+        dataTransfer.setData("application/x-mysys-barcode-field", payload);
+        dataTransfer.setData("text/plain", payload);
+      });
+      chip.on("click", () => {
+        this.canvas.addFieldElement(dataset);
       });
       if (query) {
-        const haystack = [label || "", dataset.path || "", pathShown || ""].join(" ").toLowerCase();
+        const haystack = [
+          label || "",
+          dataset.fieldname || "",
+          dataset.binding_key || "",
+          dataset.child_table_field || "",
+          dataset.child_doctype || "",
+          pathShown || "",
+        ].join(" ").toLowerCase();
         if (haystack.includes(query)) chip.addClass("match");
       }
       return chip;
@@ -544,96 +598,57 @@ export class BarcodeStudioPage {
       return group;
     };
 
-    const templateFields = Array.isArray(this.templateDesignFields) ? this.templateDesignFields.filter(Boolean) : [];
-    if (templateFields.length) {
-      const documentFields = [];
-      const childGroups = new Map();
+    const documentFields = [];
+    const childGroups = new Map();
 
-      for (const row of templateFields) {
-        const scope = row.scope || "Document";
-        const label = row.label || row.fieldname || row.bind_path || "";
-        const path = row.bind_path || row.path || row.fieldname || "";
-        const kind = String(row.fieldtype || "").toLowerCase() === "barcode" ? "barcode" : "text";
-        const dataset = {
-          path,
-          fieldname: row.fieldname || path,
-          fieldtype: row.fieldtype || "Data",
-          label,
-          displayLabel: label,
-          scope,
-          parent_fieldname: row.parent_fieldname || "",
-          child_doctype: row.child_doctype || "",
-          kind,
-        };
-
-        const haystack = [label, path, row.fieldname || "", row.parent_fieldname || "", row.child_doctype || ""].join(" ").toLowerCase();
-        if (query && !haystack.includes(query)) continue;
-
-        if (scope === "Child Table") {
-          const groupKey = row.parent_fieldname || row.child_doctype || "child";
-          if (!childGroups.has(groupKey)) {
-            childGroups.set(groupKey, {
-              title: row.child_doctype || row.parent_fieldname || __("Child Table"),
-              open: forceOpen || saved[groupKey] === true,
-              items: [],
-            });
-          }
-          childGroups.get(groupKey).items.push(makeChip(label, dataset, path));
-        } else {
-          documentFields.push(makeChip(label, dataset, path));
-        }
-      }
-
-      if (documentFields.length) {
-        makeGroup("Document", "", true, documentFields, false);
-      }
-      for (const [groupKey, groupInfo] of childGroups.entries()) {
-        makeGroup(groupInfo.title, groupKey, groupInfo.open, groupInfo.items);
-      }
-
-      if (!$panel.children().length) {
-        $panel.html("<div class='text-muted'>No fields</div>");
-      }
-
-      const anyOpen = $(".bs-field-group[data-ct]").toArray().some((el) => el.classList.contains("open"));
-      $("#bs-fields-collapse-toggle").text(anyOpen ? "Collapse All" : "Expand All");
-      return;
-    }
-
-    const topWrap = [];
     for (const field of this.fields || []) {
+      const bindingKey = field.binding_key || field.fieldname || "";
+      const label = field.label || field.fieldname || bindingKey;
       if (query) {
-        const haystack = [field.label || field.fieldname || "", field.fieldname || ""].join(" ").toLowerCase();
+        const haystack = [
+          label,
+          field.fieldname || "",
+          bindingKey,
+          field.child_table_field || "",
+          field.child_doctype || "",
+        ].join(" ").toLowerCase();
         if (!haystack.includes(query)) continue;
       }
-      topWrap.push(makeChip(field.label || field.fieldname, {
-        path: field.fieldname,
-        fieldname: field.fieldname,
-        fieldtype: field.fieldtype,
-        displayLabel: field.label || field.fieldname,
-        kind: String(field.fieldtype || "").toLowerCase() === "barcode" ? "barcode" : "text",
-      }));
-    }
-    makeGroup("Top-level", "", true, topWrap, false);
 
-    for (const [ct, groupInfo] of Object.entries(this.childFieldGroups || {})) {
-      const open = forceOpen || saved[ct] === true;
-      const chips = [];
-      for (const field of groupInfo.fields || []) {
-        if (query) {
-          const haystack = [field.label || "", field.fieldname || "", field.fieldname_indexed || ""].join(" ").toLowerCase();
-          if (!haystack.includes(query)) continue;
+      const dataset = {
+        path: bindingKey,
+        label,
+        displayLabel: label,
+        fieldname: field.fieldname || bindingKey,
+        binding_key: bindingKey,
+        source_level: field.source_level || "Document",
+        child_table_field: field.child_table_field || null,
+        child_doctype: field.child_doctype || null,
+        fieldtype: field.fieldtype,
+        sample_value: field.sample_value || "",
+      };
+      dataset.kind = this.isBarcodeField(dataset) ? "barcode" : "text";
+
+      if (dataset.source_level === "Child Table") {
+        const groupKey = field.child_table_field || field.child_doctype || "child";
+        if (!childGroups.has(groupKey)) {
+          childGroups.set(groupKey, {
+            title: field.child_table_field || field.child_doctype || __("Child Table"),
+            open: forceOpen || saved[groupKey] === true,
+            items: [],
+          });
         }
-        chips.push(makeChip(field.label, {
-          path: field.fieldname_indexed,
-          fieldname: field.fieldname_indexed,
-          fieldtype: field.fieldtype,
-          is_child: true,
-          displayLabel: field.label || field.fieldname_indexed,
-          kind: String(field.fieldtype || "").toLowerCase() === "barcode" ? "barcode" : "text",
-        }, field.fieldname_indexed));
+        childGroups.get(groupKey).items.push(makeChip(label, dataset, bindingKey));
+      } else {
+        documentFields.push(makeChip(label, dataset, bindingKey));
       }
-      makeGroup(`${ct} (Child)`, ct, open, chips);
+    }
+
+    if (documentFields.length) {
+      makeGroup("Document", "", true, documentFields, false);
+    }
+    for (const [groupKey, groupInfo] of childGroups.entries()) {
+      makeGroup(groupInfo.title, groupKey, groupInfo.open, groupInfo.items);
     }
 
     if (!$panel.children().length) {
@@ -805,6 +820,10 @@ export class BarcodeStudioPage {
             $("#bs-template").val(this.templateName);
             dialog.hide();
             frappe.show_alert({ message: __("Template saved"), indicator: "green" });
+            this.studioContext.template = this.templateName;
+            if (frappe.route_options) {
+              frappe.route_options.template = this.templateName;
+            }
             frappe.set_route("barcode-studio", this.doctype, this.docname || "", this.templateName);
           }
         } catch (error) {
