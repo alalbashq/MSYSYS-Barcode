@@ -10,6 +10,26 @@ from frappe.utils.safe_exec import safe_eval
 from .zpl.render import render_zpl
 
 
+BARCODE_FIELD_TYPES = {
+	"Data",
+	"Small Text",
+	"Long Text",
+	"Select",
+	"Link",
+	"Dynamic Link",
+	"Int",
+	"Float",
+	"Currency",
+	"Percent",
+	"Date",
+	"Datetime",
+	"Time",
+	"Read Only",
+	"Barcode",
+	"Text Editor",
+}
+
+
 @frappe.whitelist()
 def preview_template(template: str) -> dict:
 	doc = frappe.get_doc("Barcode Template", template)
@@ -153,24 +173,7 @@ def get_meta_fields(doctype: str, force: bool = False) -> list[dict]:
 	meta = get_meta(doctype)
 	out = []
 	for df in meta.fields:
-		if df.fieldtype in (
-			"Data",
-			"Small Text",
-			"Long Text",
-			"Select",
-			"Link",
-			"Dynamic Link",
-			"Int",
-			"Float",
-			"Currency",
-			"Percent",
-			"Date",
-			"Datetime",
-			"Time",
-			"Text Editor",
-			"Read Only",
-			"Barcode",
-		):
+		if df.fieldtype in BARCODE_FIELD_TYPES:
 			out.append(
 				{
 					"label": df.label,
@@ -195,6 +198,82 @@ def get_meta_fields(doctype: str, force: bool = False) -> list[dict]:
 		seen.add(f["fieldname"])
 		uniq.append(f)
 	return uniq
+
+
+@frappe.whitelist()
+def get_doc_field_catalog(doctype: str) -> dict:
+	"""ترجع الحقول الجذرية وحقول child tables مع المسار البرمجي الجاهز للرندر."""
+	meta = get_meta(doctype)
+
+	def build_field(df, path, scope, parent_fieldname="", child_doctype=""):
+		return {
+			"label": df.label or df.fieldname,
+			"fieldname": df.fieldname,
+			"fieldtype": df.fieldtype,
+			"path": path,
+			"scope": scope,
+			"parent_fieldname": parent_fieldname,
+			"child_doctype": child_doctype,
+		}
+
+	root_fields: list[dict] = []
+	child_tables: list[dict] = []
+
+	for df in meta.fields:
+		if df.fieldtype in BARCODE_FIELD_TYPES:
+			root_fields.append(build_field(df, df.fieldname, "Document"))
+			continue
+
+		if df.fieldtype != "Table" or not df.options:
+			continue
+
+		try:
+			child_meta = get_meta(df.options)
+		except Exception:
+			continue
+
+		child_fields: list[dict] = []
+		for child_df in child_meta.fields:
+			if child_df.fieldtype not in BARCODE_FIELD_TYPES:
+				continue
+			child_fields.append(
+				build_field(
+					child_df,
+					f"{df.fieldname}[].{child_df.fieldname}",
+					"Child Table",
+					parent_fieldname=df.fieldname,
+					child_doctype=df.options,
+				)
+			)
+
+		child_tables.append(
+			{
+				"label": df.label or df.fieldname,
+				"fieldname": df.fieldname,
+				"child_doctype": df.options,
+				"fields": child_fields,
+			}
+		)
+
+	if not any(field["fieldname"] == "name" for field in root_fields):
+		root_fields.insert(
+			0,
+			{
+				"label": "Name",
+				"fieldname": "name",
+				"fieldtype": "Data",
+				"path": "name",
+				"scope": "Document",
+				"parent_fieldname": "",
+				"child_doctype": "",
+			},
+		)
+
+	return {
+		"doctype": doctype,
+		"root_fields": root_fields,
+		"child_tables": child_tables,
+	}
 
 
 @frappe.whitelist()

@@ -7,6 +7,7 @@
  "field_order": [
   "section_break_raol",
   "template_name",
+  "source_doctype",
   "output_type",
   "width_mm",
   "height_mm",
@@ -15,6 +16,7 @@
   "sample_context",
   "page_width_mm",
   "page_height_mm",
+  "design_fields",
   "layout_json"
  ],
  "fields": [
@@ -28,6 +30,14 @@
    "in_list_view": 1,
    "label": "Template Name",
    "reqd": 1
+  },
+  {
+   "fieldname": "source_doctype",
+   "fieldtype": "Link",
+   "label": "Source DocType",
+   "options": "DocType",
+   "description": "DocType whose fields are shown in Barcode Studio",
+   "search_index": 1
   },
   {
    "default": "HTML",
@@ -81,6 +91,12 @@
    "fieldname": "page_height_mm",
    "fieldtype": "Float",
    "label": "Page Height (mm)"
+  },
+  {
+   "fieldname": "design_fields",
+   "fieldtype": "Table",
+   "label": "Design Fields",
+   "options": "Barcode Template Field"
   },
   {
    "fieldname": "layout_json",

@@ -545,8 +545,11 @@ mysys.qbp.Page = class {
   open_in_studio(){
     const payload = Object.assign({}, this.doc);
     payload[this.child_field] = this.items;
+    payload.__child_field = this.child_field;
+    const template = $("#qbp-template").val() || "";
     const ctx = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-    const path = `#/barcode-studio/${encodeURIComponent(this.doc.doctype)}/${encodeURIComponent(this.doc.name)}?ctx=${encodeURIComponent(ctx)}`;
+    const templatePath = template ? `/${encodeURIComponent(template)}` : "";
+    const path = `#/barcode-studio/${encodeURIComponent(this.doc.doctype)}/${encodeURIComponent(this.doc.name)}${templatePath}?ctx=${encodeURIComponent(ctx)}`;
     const url  = `${frappe.urllib.get_base_url()}/app/${path.replace('#/','')}`;
     window.open(url, '_blank', 'noopener');
   }

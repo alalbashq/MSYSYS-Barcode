@@ -102,22 +102,32 @@
 
 				<!-- Page -->
 				<div class="bs-group">
-					<div class="bs-group-title">Page</div>
+					<div class="bs-group-title">Sticker</div>
 					<div class="bs-group-body">
 						<input
 							id="bs-w"
 							type="number"
 							class="form-control form-control-sm"
-							style="width: 90px"
+							style="width: 88px"
 							value="{{ width_mm || 50 }}"
 						/>
+						<span class="text-muted small">×</span>
 						<input
 							id="bs-h"
 							type="number"
 							class="form-control form-control-sm"
-							style="width: 90px"
+							style="width: 88px"
 							value="{{ height_mm || 30 }}"
 						/>
+						<select
+							id="bs-unit"
+							class="form-control form-control-sm"
+							style="width: 82px"
+							title="Measurement unit"
+						>
+							<option value="mm" selected>mm</option>
+							<option value="in">in</option>
+						</select>
 						<button id="bs-apply" class="btn btn-primary btn-sm">Apply</button>
 					</div>
 				</div>
@@ -226,8 +236,7 @@
 							R
 						</button>
 						<button
-							class="btn btn-outline-secondary btn-sm"
-							id="btn-clear-value"
+							class="btn btn-outline-secondary btn-sm bs-clear-value"
 							title="Clear Value"
 						>
 							Clear Value
@@ -254,128 +263,81 @@
 <!-- Main Layout -->
 <div class="bs-layout mt-2">
 	<!-- LEFT: Fields -->
-	<div class="bs-side">
-  <div class="bs-collapsible" id="bs-fields-box">
-    <div class="head">
-      <div class="font-weight-bold">Fields</div>
-      <div class="d-flex align-items-center" style="gap:6px">
-        <!-- جديد: شريط بحث -->
-        <input id="bs-field-search" class="form-control form-control-sm" placeholder="Search fields…" style="width:160px">
-        <!-- جديد: زر طي/فتح الكل للـchild groups -->
-        <button class="btn btn-xs btn-light" id="bs-fields-collapse-toggle" title="Collapse/Expand All">Collapse All</button>
-        <button class="btn btn-xs btn-light" id="bs-toggle-fields">Hide</button>
-      </div>
-    </div>
+	<div class="bs-side bs-panel-fields">
+		<div class="bs-collapsible" id="bs-fields-box">
+			<div class="head">
+				<div class="font-weight-bold">Fields</div>
+				<div class="d-flex align-items-center" style="gap:6px">
+					<input
+						id="bs-field-search"
+						class="form-control form-control-sm"
+						placeholder="Search fields…"
+						style="width:160px"
+					/>
+					<button
+						class="btn btn-xs btn-light"
+						id="bs-fields-collapse-toggle"
+						title="Collapse/Expand All"
+					>
+						Collapse All
+					</button>
+					<button class="btn btn-xs btn-light" id="bs-toggle-fields">Hide</button>
+				</div>
+			</div>
+			<div class="body">
+				<div id="bs-fields" class="small bs-fields-list"></div>
+			</div>
+		</div>
+	</div>
 
-    <!-- NB: جعلنا body مرن + overflow -->
-    <div class="body" style=" overflow:auto">
-      <div id="bs-fields" class="small" style="display:flex;flex-direction:column;gap:8px;"></div>
-    </div>
-  </div>
-</div>
-	<!-- CENTER: Canvas + Splitter + Preview -->
-	<div class="bs-center d-flex">
-		<div class="bb-ruler bb-ruler-x"></div>
-
-		<div
-			class="position-relative"
-			style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden"
-		>
-    	<div class="bs-groups" style="margin-bottom: 6px;">
+	<!-- CENTER: Design + Preview side by side -->
+	<div class="bs-center">
+		<div class="bs-center-toolbar">
+			<div class="bs-groups">
 				<div class="bs-group">
 					<div class="bs-group-title">Align</div>
 					<div class="bs-group-body">
-						<button class="btn btn-light btn-sm" data-align="left" title="Align Left">
-							⟸
-						</button>
-						<button
-							class="btn btn-light btn-sm"
-							data-align="center"
-							title="Align Center"
-						>
-							↔
-						</button>
-						<button
-							class="btn btn-light btn-sm"
-							data-align="right"
-							title="Align Right"
-						>
-							⟹
-						</button>
-						<button class="btn btn-light btn-sm" data-align="top" title="Align Top">
-							⟰
-						</button>
-						<button
-							class="btn btn-light btn-sm"
-							data-align="middle"
-							title="Align Middle"
-						>
-							↕
-						</button>
-						<button
-							class="btn btn-light btn-sm"
-							data-align="bottom"
-							title="Align Bottom"
-						>
-							⟱
-						</button>
+						<button class="btn btn-light btn-sm" data-align="left" title="Align Left">⟸</button>
+						<button class="btn btn-light btn-sm" data-align="center" title="Align Center">↔</button>
+						<button class="btn btn-light btn-sm" data-align="right" title="Align Right">⟹</button>
+						<button class="btn btn-light btn-sm" data-align="top" title="Align Top">⟰</button>
+						<button class="btn btn-light btn-sm" data-align="middle" title="Align Middle">↕</button>
+						<button class="btn btn-light btn-sm" data-align="bottom" title="Align Bottom">⟱</button>
 					</div>
 				</div>
 
 				<div class="bs-group">
 					<div class="bs-group-title">Text</div>
 					<div class="bs-group-body" id="text-style-group">
-						<button
-							class="btn btn-outline-secondary btn-sm"
-							data-textalign="left"
-							title="Text Left"
-						>
-							L
-						</button>
-						<button
-							class="btn btn-outline-secondary btn-sm"
-							data-textalign="center"
-							title="Text Center"
-						>
-							C
-						</button>
-						<button
-							class="btn btn-outline-secondary btn-sm"
-							data-textalign="right"
-							title="Text Right"
-						>
-							R
-						</button>
-						<button
-							class="btn btn-outline-secondary btn-sm"
-							id="btn-clear-value"
-							title="Clear Value"
-						>
-							Clear Value
-						</button>
+						<button class="btn btn-outline-secondary btn-sm" data-textalign="left" title="Text Left">L</button>
+						<button class="btn btn-outline-secondary btn-sm" data-textalign="center" title="Text Center">C</button>
+						<button class="btn btn-outline-secondary btn-sm" data-textalign="right" title="Text Right">R</button>
+						<button class="btn btn-outline-secondary btn-sm bs-clear-value" title="Clear Value">Clear Value</button>
 					</div>
 				</div>
 			</div>
-			<div class="bb-ruler bb-ruler-y">        
-      </div>
-        
-			<!-- Canvas region -->
-			<div
-				id="bs-canvas-wrap"
-				class="bb-stage"
-				style="transform-origin: top left; overflow: auto; min-height: 160px"
-			>
-				<canvas id="bs-canvas"></canvas>
-			</div>
+		</div>
 
-			<!-- Resizable Splitter -->
-			<div id="bs-splitter" class="bs-splitter" title="Drag to resize"></div>
+		<div class="bs-center-grid">
+			<section class="bs-pane bs-design-pane">
+				<div class="bs-pane-head">
+					<div class="font-weight-bold">Design</div>
+					<div class="bs-pane-meta">Actual sticker size in printer units</div>
+				</div>
+				<div id="bs-canvas-wrap" class="bb-stage bs-canvas-stage" style="transform-origin: top left;">
+					<canvas id="bs-canvas"></canvas>
+				</div>
+			</section>
 
-			<!-- Preview region -->
-			<div id="bs-preview-pane" class="bs-preview-pane">
-				<div class="font-weight-bold small mb-1">Preview</div>
-				<div id="bs-preview"></div>
-			</div>
+			<section class="bs-pane bs-preview-column">
+				<div class="bs-pane-head">
+					<div class="font-weight-bold">Preview</div>
+					<div class="bs-pane-meta">1:1</div>
+				</div>
+				<div id="bs-preview-pane" class="bs-preview-surface">
+					<div id="bs-preview"></div>
+				</div>
+			</section>
 		</div>
 
 		<div class="bs-status">
@@ -385,15 +347,15 @@
 	</div>
 
 	<!-- RIGHT: Properties -->
-<div class="bs-side">
-  <div class="bs-collapsible" id="bs-props-box">
-    <div class="head">
-      <div class="font-weight-bold">Properties</div>
-      <div><button class="btn btn-xs btn-light" id="bs-toggle-props">Hide</button></div>
-    </div>
-    <!-- جديد: نضمن التمرير الداخلي -->
-    <div class="body" style="min-height:0; max-height:100%; overflow:auto">
-      <div id="bs-props" class="small text-muted"><em>Select an object</em></div>
-    </div>
-  </div>
+	<div class="bs-side bs-panel-props">
+		<div class="bs-collapsible" id="bs-props-box">
+			<div class="head">
+				<div class="font-weight-bold">Properties</div>
+				<div><button class="btn btn-xs btn-light" id="bs-toggle-props">Hide</button></div>
+			</div>
+			<div class="body">
+				<div id="bs-props" class="small text-muted"><em>Select an object</em></div>
+			</div>
+		</div>
+	</div>
 </div>

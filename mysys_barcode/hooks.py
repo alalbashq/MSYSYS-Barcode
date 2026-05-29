@@ -23,7 +23,7 @@ app_license = "mit"
 
 # Includes in <head>
 # ------------------
-pp_include_css = [
+app_include_css = [
 	"/assets/mysys_barcode/css/barcode.css",
 	"/assets/mysys_barcode/css/tabulator/tabulator.min.css",
 	"/assets/mysys_barcode/css/tabulator-c.css",
