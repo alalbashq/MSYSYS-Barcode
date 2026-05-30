@@ -54,7 +54,28 @@ app_include_js = [
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-doctype_js = {"Sales Invoice": "public/js/sales_invoice.js", "Item": "public/js/item.js"}
+quick_barcode_print_doctypes = [
+	"Delivery Note",
+	"Material Request",
+	"Packing Slip",
+	"Pick List",
+	"Purchase Invoice",
+	"Purchase Order",
+	"Purchase Receipt",
+	"Quotation",
+	"Sales Invoice",
+	"Sales Order",
+	"Stock Entry",
+	"Stock Reconciliation",
+	"Subcontracting Order",
+	"Subcontracting Receipt",
+	"Supplier Quotation",
+]
+
+doctype_js = {
+	**{doctype: "public/js/quick_barcode_print_button.js" for doctype in quick_barcode_print_doctypes},
+	"Item": "public/js/item.js",
+}
 
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}

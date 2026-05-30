@@ -1,0 +1,194 @@
+{
+ "app": "mysys_barcode",
+ "charts": [],
+ "content": "[{\"id\":\"mysys-barcode-title\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>MYSYS Barcode</b></span>\",\"col\":12}},{\"id\":\"mysys-barcode-note\",\"type\":\"paragraph\",\"data\":{\"text\":\"Quick access to barcode design and printing tools.\",\"col\":12}},{\"id\":\"mysys-barcode-studio-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Barcode Studio\",\"col\":3}},{\"id\":\"mysys-barcode-print-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Quick Barcode Print\",\"col\":3}},{\"id\":\"mysys-barcode-template-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Barcode Templates\",\"col\":3}},{\"id\":\"mysys-barcode-config-shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Barcode DocTypes\",\"col\":3}},{\"id\":\"mysys-barcode-spacer\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"mysys-barcode-setup-card\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}},{\"id\":\"mysys-barcode-design-card\",\"type\":\"card\",\"data\":{\"card_name\":\"Design\",\"col\":4}},{\"id\":\"mysys-barcode-logs-card\",\"type\":\"card\",\"data\":{\"card_name\":\"Print Logs\",\"col\":4}}]",
+ "creation": "2026-05-30 00:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "barcode",
+ "idx": 0,
+ "indicator_color": "blue",
+ "is_hidden": 0,
+ "label": "MYSYS Barcode",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Setup",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Barcode DocTypes",
+   "link_count": 0,
+   "link_to": "Barcode DocType",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Barcode Settings",
+   "link_count": 0,
+   "link_to": "Barcode Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Print Barcode Settings",
+   "link_count": 0,
+   "link_to": "Print Barcode Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item",
+   "link_count": 0,
+   "link_to": "Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Design",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Barcode Templates",
+   "link_count": 0,
+   "link_to": "Barcode Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Barcode Studio",
+   "link_count": 0,
+   "link_to": "barcode-studio",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Quick Barcode Print",
+   "link_count": 0,
+   "link_to": "quick-barcode-print",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Print Logs",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Barcode Print Log",
+   "link_count": 0,
+   "link_to": "Barcode Print Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-05-30 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "MYSYS Barcode",
+ "name": "MYSYS Barcode",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Stock Manager"
+  },
+  {
+   "role": "Stock User"
+  }
+ ],
+ "sequence_id": 30.0,
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "",
+   "format": "{}",
+   "label": "Barcode Studio",
+   "link_to": "barcode-studio",
+   "stats_filter": "[]",
+   "type": "Page"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "format": "{}",
+   "label": "Quick Barcode Print",
+   "link_to": "quick-barcode-print",
+   "stats_filter": "[]",
+   "type": "Page"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "{}",
+   "label": "Barcode Templates",
+   "link_to": "Barcode Template",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "format": "{}",
+   "label": "Barcode DocTypes",
+   "link_to": "Barcode DocType",
+   "stats_filter": "[]",
+   "type": "DocType"
+  }
+ ],
+ "title": "MYSYS Barcode"
+}

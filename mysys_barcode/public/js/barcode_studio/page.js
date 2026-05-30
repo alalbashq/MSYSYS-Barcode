@@ -279,12 +279,8 @@ export class BarcodeStudioPage {
       $("#bs-toggle-fields").text(hidden ? "Show" : "Hide");
     });
 
-    $("#bs-toggle-props").on("click", () => {
-      const body = $("#bs-props-box .body");
-      const hidden = body.is(":visible");
-      body.toggle(!hidden);
-      $("#bs-toggle-props").text(hidden ? "Show" : "Hide");
-    });
+    $("#bs-toggle-props").on("click", () => this.setPropertiesPanelVisible(false));
+    $("#bs-show-props").on("click", () => this.setPropertiesPanelVisible(true));
 
     $("#bs-field-search").on("input", (event) => {
       this.buildFieldPalette(event.target.value || "");
@@ -312,6 +308,10 @@ export class BarcodeStudioPage {
     $("#bs-save").on("click", () => this.saveTemplateDialog());
     $("#bs-add-text").on("click", () => this.canvas.addComponent("text"));
     $("#bs-add-barcode").on("click", () => this.canvas.addComponent("barcode"));
+    $("#bs-zoom-out").on("click", () => this.canvas.setZoom(this.canvas.scale - 0.1, { persist: true }));
+    $("#bs-zoom-in").on("click", () => this.canvas.setZoom(this.canvas.scale + 0.1, { persist: true }));
+    $("#bs-zoom-reset").on("click", () => this.canvas.setZoom(1, { persist: true }));
+    $("#bs-zoom").on("input change", (event) => this.canvas.setZoom((Number.parseInt(event.target.value, 10) || 100) / 100, { persist: true }));
     $("#bs-unit").on("change", (event) => this.setDimensionUnit(event.target.value, { persist: true, refresh: true }));
     $("#bs-toggle-grid").on("click", () => this.toggleGrid());
     $("#bs-snap").on("change", (event) => this.canvas.setSnap(event.target.value || 1, { persist: true }));
@@ -385,12 +385,27 @@ export class BarcodeStudioPage {
     const grid = !!this.state.get("grid", false);
     const snap = this.state.get("snap", 1);
     const unit = this.state.get("unit", BARCODE_STUDIO_DEFAULT_UNIT);
+    const propsVisible = !this.state.get("props_collapsed", false);
 
     this.toggleTheme(dark, { persist: false });
     this.setDimensionUnit(unit, { persist: false, refresh: true });
+    this.setPropertiesPanelVisible(propsVisible, { persist: false });
     this.canvas.setSnap(snap, { persist: false });
     this.canvas.toggleGrid(grid, { persist: false });
     $("#bs-snap-label").text(`${this.canvas.snapMM}mm`);
+  }
+
+  setPropertiesPanelVisible(visible, { persist = true } = {}) {
+    const isVisible = !!visible;
+    $(".bs-layout").toggleClass("props-collapsed", !isVisible);
+    $("#bs-toggle-props").text(isVisible ? "Hide" : "Show");
+    $("#bs-show-props").toggle(!isVisible);
+    this.canvas?.fabricCanvas?.calcOffset?.();
+    this.canvas?.fabricCanvas?.requestRenderAll?.();
+    if (persist) {
+      this.state.set({ props_collapsed: !isVisible });
+    }
+    return isVisible;
   }
 
   toggleTheme(force, { persist = true } = {}) {

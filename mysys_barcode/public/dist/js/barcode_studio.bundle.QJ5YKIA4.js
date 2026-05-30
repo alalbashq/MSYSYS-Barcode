@@ -148,11 +148,21 @@
       this._suspendPreview = false;
       this._previewTicket = 0;
       this._dropTargets = [];
+      this.stageEl = null;
+      this.zoomShell = null;
+      this._panState = null;
       this.previewDebounced = ((_a2 = frappe.utils) == null ? void 0 : _a2.debounce(() => {
         void this.preview();
       }, 180)) || (() => void this.preview());
       this._boundKeydown = this._handleKeydown.bind(this);
       this._boundWheel = this._handleWheel.bind(this);
+      this._boundPanStart = this._handlePanStart.bind(this);
+      this._boundPanMove = this._handlePanMove.bind(this);
+      this._boundPanEnd = this._handlePanEnd.bind(this);
+      this._boundStageScroll = () => {
+        var _a3, _b;
+        return (_b = (_a3 = this.fabricCanvas) == null ? void 0 : _a3.calcOffset) == null ? void 0 : _b.call(_a3);
+      };
       this._boundDragOver = (ev) => {
         ev.preventDefault();
         if (ev.dataTransfer)
@@ -216,6 +226,7 @@
         preserveObjectStacking: true
       });
       this.fabricCanvas.upperCanvasEl.tabIndex = 0;
+      this._setupZoomShell();
       this._bindCanvasEvents();
       this.setPageSize(this.pageWidthMM, this.pageHeightMM, { persist: false });
       this.setZoom(1, { persist: false });
@@ -230,6 +241,14 @@
       if (this.canvasEl) {
         this.canvasEl.removeEventListener("wheel", this._boundWheel);
       }
+      if (this.stageEl) {
+        this.stageEl.removeEventListener("wheel", this._boundWheel);
+        this.stageEl.removeEventListener("mousedown", this._boundPanStart);
+        this.stageEl.removeEventListener("scroll", this._boundStageScroll);
+        this.stageEl.classList.remove("is-panning");
+      }
+      document.removeEventListener("mousemove", this._boundPanMove);
+      document.removeEventListener("mouseup", this._boundPanEnd);
       document.removeEventListener("keydown", this._boundKeydown);
       if (this.fabricCanvas) {
         try {
@@ -238,6 +257,44 @@
         } catch (e) {
         }
         this.fabricCanvas = null;
+      }
+    }
+    _setupZoomShell() {
+      var _a2;
+      this.stageEl = document.getElementById("bs-canvas-wrap");
+      const wrapperEl = (_a2 = this.fabricCanvas) == null ? void 0 : _a2.wrapperEl;
+      if (!this.stageEl || !wrapperEl)
+        return;
+      let shell = document.getElementById("bs-canvas-zoom-shell");
+      if (!shell) {
+        shell = document.createElement("div");
+        shell.id = "bs-canvas-zoom-shell";
+        shell.className = "bs-canvas-zoom-shell";
+        wrapperEl.parentNode.insertBefore(shell, wrapperEl);
+      }
+      if (wrapperEl.parentNode !== shell) {
+        shell.appendChild(wrapperEl);
+      }
+      this.zoomShell = shell;
+      this._updateZoomShellDimensions();
+    }
+    _updateZoomShellDimensions() {
+      if (!this.fabricCanvas || !this.zoomShell)
+        return;
+      const width = this.fabricCanvas.getWidth();
+      const height = this.fabricCanvas.getHeight();
+      const scaledWidth = Math.ceil(width * this.scale);
+      const scaledHeight = Math.ceil(height * this.scale);
+      this.zoomShell.style.width = `${scaledWidth}px`;
+      this.zoomShell.style.height = `${scaledHeight}px`;
+      const wrapperEl = this.fabricCanvas.wrapperEl;
+      if (wrapperEl) {
+        wrapperEl.style.transform = `scale(${this.scale})`;
+        wrapperEl.style.transformOrigin = "top left";
+      }
+      if (this.stageEl) {
+        this.stageEl.style.setProperty("--bs-grid-minor", `${this.mmToPx * this.scale}px`);
+        this.stageEl.style.setProperty("--bs-grid-major", `${this.mmToPx * this.scale * 5}px`);
       }
     }
     _bindCanvasEvents() {
@@ -261,13 +318,14 @@
           this.previewDebounced();
       });
       canvas.on("object:scaled", ({ target }) => {
-        this._keepInsideCanvas(target);
+        this._keepInsideCanvas(target, { fitSize: true });
         this._syncBarcodeBox(target);
         this.renderProps(target);
         if (!this._suspendPreview)
           this.previewDebounced();
       });
       canvas.on("object:modified", (e) => {
+        this._keepInsideCanvas(e.target);
         this._syncBarcodeBox(e.target);
         this.renderProps(e.target);
         if (!this._suspendPreview)
@@ -283,6 +341,11 @@
       });
       this._bindDropTargets();
       this.canvasEl.addEventListener("wheel", this._boundWheel, { passive: false });
+      if (this.stageEl) {
+        this.stageEl.addEventListener("wheel", this._boundWheel, { passive: false });
+        this.stageEl.addEventListener("mousedown", this._boundPanStart);
+        this.stageEl.addEventListener("scroll", this._boundStageScroll, { passive: true });
+      }
       document.addEventListener("keydown", this._boundKeydown);
     }
     _bindDropTargets() {
@@ -337,6 +400,9 @@
       const active = this.fabricCanvas.getActiveObject();
       const canvasHasFocus = document.activeElement === this.fabricCanvas.upperCanvasEl;
       const isEditingTextbox = active && ((_c = active.isType) == null ? void 0 : _c.call(active, "textbox")) && active.isEditing;
+      if (active && canvasHasFocus && !isEditingTextbox && this._moveActiveWithArrow(ev)) {
+        return;
+      }
       if ((ev.key === "Delete" || ev.key === "Backspace") && active && canvasHasFocus && !isEditingTextbox) {
         ev.preventDefault();
         this.fabricCanvas.remove(active);
@@ -362,22 +428,107 @@
         (_e = (_d = this.page.canvasClearButton) == null ? void 0 : _d.trigger) == null ? void 0 : _e.call(_d, "click");
       }
     }
+    _moveActiveWithArrow(ev) {
+      var _a2;
+      const direction = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1]
+      }[ev.key];
+      if (!direction)
+        return false;
+      const active = (_a2 = this.fabricCanvas) == null ? void 0 : _a2.getActiveObject();
+      if (!active)
+        return false;
+      ev.preventDefault();
+      const step = Math.max(0.1, this.snapMM || 1) * this.mmToPx * (ev.shiftKey ? 5 : 1);
+      active.left = toNumber(active.left, 0) + direction[0] * step;
+      active.top = toNumber(active.top, 0) + direction[1] * step;
+      active.setCoords();
+      this._keepInsideCanvas(active);
+      this._syncBarcodeBox(active);
+      this.renderProps(active);
+      this.fabricCanvas.requestRenderAll();
+      if (!this._suspendPreview)
+        this.previewDebounced();
+      return true;
+    }
     _handleWheel(ev) {
       if (!this.fabricCanvas || !ev.ctrlKey)
         return;
       ev.preventDefault();
+      ev.stopPropagation();
       const delta = Math.sign(ev.deltaY);
-      this.setZoom(this.scale + (delta < 0 ? 0.05 : -0.05));
+      this.setZoom(this.scale + (delta < 0 ? 0.05 : -0.05), { anchorEvent: ev });
     }
-    _keepInsideCanvas(obj) {
+    _handlePanStart(ev) {
+      var _a2, _b;
+      if (!this.stageEl)
+        return;
+      const insideCanvas = !!((_b = (_a2 = ev.target) == null ? void 0 : _a2.closest) == null ? void 0 : _b.call(_a2, ".canvas-container"));
+      const shouldPan = ev.button === 1 || ev.altKey || !insideCanvas;
+      if (!shouldPan)
+        return;
+      ev.preventDefault();
+      this._panState = {
+        x: ev.clientX,
+        y: ev.clientY,
+        left: this.stageEl.scrollLeft,
+        top: this.stageEl.scrollTop
+      };
+      this.stageEl.classList.add("is-panning");
+      document.addEventListener("mousemove", this._boundPanMove);
+      document.addEventListener("mouseup", this._boundPanEnd);
+    }
+    _handlePanMove(ev) {
+      if (!this._panState || !this.stageEl)
+        return;
+      ev.preventDefault();
+      this.stageEl.scrollLeft = this._panState.left - (ev.clientX - this._panState.x);
+      this.stageEl.scrollTop = this._panState.top - (ev.clientY - this._panState.y);
+    }
+    _handlePanEnd() {
+      var _a2;
+      if (!this._panState)
+        return;
+      this._panState = null;
+      (_a2 = this.stageEl) == null ? void 0 : _a2.classList.remove("is-panning");
+      document.removeEventListener("mousemove", this._boundPanMove);
+      document.removeEventListener("mouseup", this._boundPanEnd);
+    }
+    _keepInsideCanvas(obj, { fitSize = false } = {}) {
       if (!this.fabricCanvas || !obj)
         return;
+      if (fitSize) {
+        this._fitObjectInsideCanvas(obj);
+      }
       const snap = Math.max(1, this.snapMM * this.mmToPx);
       const bounds = obj.getBoundingRect(true);
       const maxLeft = Math.max(0, this.fabricCanvas.getWidth() - bounds.width);
       const maxTop = Math.max(0, this.fabricCanvas.getHeight() - bounds.height);
       obj.left = clamp(Math.round((obj.left || 0) / snap) * snap, 0, maxLeft);
       obj.top = clamp(Math.round((obj.top || 0) / snap) * snap, 0, maxTop);
+      obj.setCoords();
+    }
+    _fitObjectInsideCanvas(obj) {
+      var _a2, _b, _c, _d, _e, _f;
+      if (!this.fabricCanvas || !obj)
+        return;
+      const canvasWidth = this.fabricCanvas.getWidth();
+      const canvasHeight = this.fabricCanvas.getHeight();
+      const left = clamp(toNumber(obj.left, 0), 0, Math.max(0, canvasWidth - 1));
+      const top = clamp(toNumber(obj.top, 0), 0, Math.max(0, canvasHeight - 1));
+      const maxWidth = Math.max(1, canvasWidth - left);
+      const maxHeight = Math.max(1, canvasHeight - top);
+      const currentWidth = (_c = (_b = (_a2 = obj.getScaledWidth) == null ? void 0 : _a2.call(obj)) != null ? _b : obj.width) != null ? _c : 0;
+      const currentHeight = (_f = (_e = (_d = obj.getScaledHeight) == null ? void 0 : _d.call(obj)) != null ? _e : obj.height) != null ? _f : 0;
+      if (currentWidth > maxWidth && currentWidth > 0) {
+        obj.scaleX = toNumber(obj.scaleX, 1) * (maxWidth / currentWidth);
+      }
+      if (currentHeight > maxHeight && currentHeight > 0) {
+        obj.scaleY = toNumber(obj.scaleY, 1) * (maxHeight / currentHeight);
+      }
       obj.setCoords();
     }
     _syncBarcodeBox(obj) {
@@ -630,6 +781,22 @@
       img.scaleY = (height || imageHeight) / imageHeight;
       img.setCoords();
     }
+    _defaultBarcodeBox(x = 0, y = 0) {
+      var _a2, _b, _c, _d;
+      const pageWidth = ((_b = (_a2 = this.fabricCanvas) == null ? void 0 : _a2.getWidth) == null ? void 0 : _b.call(_a2)) || this._mmToPx(this.pageWidthMM);
+      const pageHeight = ((_d = (_c = this.fabricCanvas) == null ? void 0 : _c.getHeight) == null ? void 0 : _d.call(_c)) || this._mmToPx(this.pageHeightMM);
+      const margin = this._mmToPx(2);
+      const minWidth = this._mmToPx(18);
+      const minHeight = this._mmToPx(8);
+      const preferredWidth = Math.min(this._mmToPx(36), pageWidth * 0.72);
+      const preferredHeight = Math.min(this._mmToPx(12), pageHeight * 0.42);
+      const availableWidth = Math.max(1, pageWidth - toNumber(x, 0) - margin);
+      const availableHeight = Math.max(1, pageHeight - toNumber(y, 0) - margin);
+      return {
+        width: clamp(preferredWidth, minWidth, availableWidth),
+        height: clamp(preferredHeight, minHeight, availableHeight)
+      };
+    }
     _loadFabricImage(url) {
       return new Promise((resolve) => {
         fabric.Image.fromURL(url, (img) => resolve(img));
@@ -682,6 +849,7 @@
         this.fabricCanvas.setHeight(nextHeight * this.mmToPx);
         this.fabricCanvas.calcOffset();
         this.fabricCanvas.requestRenderAll();
+        this._updateZoomShellDimensions();
       }
       if (persist) {
         this.page.state.set({
@@ -690,14 +858,31 @@
         });
       }
     }
-    setZoom(scale, { persist = false } = {}) {
+    setZoom(scale, { persist = false, anchorEvent = null } = {}) {
       var _a2, _b;
+      const stage = this.stageEl;
+      const oldScale = this.scale || 1;
+      const anchor = stage ? {
+        x: anchorEvent ? anchorEvent.clientX - stage.getBoundingClientRect().left : stage.clientWidth / 2,
+        y: anchorEvent ? anchorEvent.clientY - stage.getBoundingClientRect().top : stage.clientHeight / 2,
+        left: stage.scrollLeft,
+        top: stage.scrollTop
+      } : null;
       this.scale = clamp(scale, 0.1, 4);
       this.page.scale = this.scale;
-      $(".bb-stage").css("transform", `scale(${this.scale})`);
+      this._updateZoomShellDimensions();
       $("#bs-zoom").val(Math.round(this.scale * 100));
       $("#bs-zoom-label").text(`${Math.round(this.scale * 100)}%`);
       (_b = (_a2 = this.fabricCanvas) == null ? void 0 : _a2.calcOffset) == null ? void 0 : _b.call(_a2);
+      if (stage && anchor && oldScale > 0) {
+        const ratio = this.scale / oldScale;
+        stage.scrollLeft = (anchor.left + anchor.x) * ratio - anchor.x;
+        stage.scrollTop = (anchor.top + anchor.y) * ratio - anchor.y;
+        window.requestAnimationFrame(() => {
+          var _a3, _b2;
+          return (_b2 = (_a3 = this.fabricCanvas) == null ? void 0 : _a3.calcOffset) == null ? void 0 : _b2.call(_a3);
+        });
+      }
       if (persist) {
         this.page.state.set({ zoom: this.scale });
       }
@@ -780,10 +965,13 @@
           marginLeft: 0
         });
         this._applyElementMetadata(img, metadata);
-        img.boxWidth = img.getScaledWidth();
-        img.boxHeight = img.getScaledHeight();
+        const box = this._defaultBarcodeBox(x, y);
+        img.boxWidth = box.width;
+        img.boxHeight = box.height;
+        this._fitImageToBox(img, img.boxWidth, img.boxHeight);
         img._barcodeSignature = this._barcodeSignature(img);
         this.fabricCanvas.add(img).setActiveObject(img);
+        this._keepInsideCanvas(img);
         this.renderProps(img);
         if (!this._suspendPreview)
           this.previewDebounced();
@@ -1103,6 +1291,91 @@
         console.warn("print log failed", error);
       }
     }
+    _printHtmlInCurrentTab(html) {
+      return new Promise((resolve) => {
+        const frame = document.createElement("iframe");
+        Object.assign(frame.style, {
+          position: "fixed",
+          right: "0",
+          bottom: "0",
+          width: "0",
+          height: "0",
+          border: "0",
+          visibility: "hidden"
+        });
+        frame.setAttribute("aria-hidden", "true");
+        document.body.appendChild(frame);
+        let cleaned = false;
+        let didPrint = false;
+        let started = false;
+        let fallbackTimer = null;
+        const cleanup = () => {
+          if (cleaned)
+            return;
+          cleaned = true;
+          if (fallbackTimer)
+            window.clearTimeout(fallbackTimer);
+          window.removeEventListener("focus", onFocus);
+          try {
+            frame.remove();
+          } catch (e) {
+          }
+          resolve();
+        };
+        const onFocus = () => {
+          if (didPrint)
+            window.setTimeout(cleanup, 500);
+        };
+        const fail = () => {
+          cleanup();
+          frappe.msgprint(__("Unable to open print preview."));
+        };
+        const printWindow = frame.contentWindow;
+        const doc = frame.contentDocument || (printWindow == null ? void 0 : printWindow.document);
+        if (!printWindow || !doc) {
+          fail();
+          return;
+        }
+        const startPrint = () => {
+          if (started || cleaned)
+            return;
+          started = true;
+          didPrint = true;
+          printWindow.onafterprint = cleanup;
+          window.addEventListener("focus", onFocus);
+          fallbackTimer = window.setTimeout(cleanup, 12e4);
+          try {
+            printWindow.focus();
+            printWindow.print();
+          } catch (error) {
+            console.error("print failed", error);
+            fail();
+          }
+        };
+        const waitForAssetsThenPrint = () => {
+          const images = Array.from(doc.images || []).filter((img) => !img.complete);
+          if (!images.length) {
+            window.setTimeout(startPrint, 50);
+            return;
+          }
+          let pending = images.length;
+          const done = () => {
+            pending -= 1;
+            if (pending <= 0)
+              window.setTimeout(startPrint, 50);
+          };
+          for (const image of images) {
+            image.addEventListener("load", done, { once: true });
+            image.addEventListener("error", done, { once: true });
+          }
+          window.setTimeout(startPrint, 1500);
+        };
+        doc.open();
+        doc.write(html);
+        doc.close();
+        window.setTimeout(waitForAssetsThenPrint, 100);
+      });
+    }
     async _printAsHiDpiImage(copies, dpi, templateName) {
       const multiplier = Math.max(1, dpi / 96);
       const imageData = await this._renderPreviewImageData(multiplier);
@@ -1117,15 +1390,7 @@
       img{display:block;width:${widthMM}mm;height:${heightMM}mm;image-rendering:crisp-edges;image-rendering:-webkit-optimize-contrast;page-break-after:always;break-after:page}
       img:last-child{page-break-after:auto;break-after:auto}
     </style></head><body>${images}</body></html>`;
-      const win = window.open("about:blank");
-      if (!win) {
-        frappe.msgprint(__("Popup blocked. Allow popups for printing."));
-        return;
-      }
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      win.print();
+      await this._printHtmlInCurrentTab(html);
     }
     async _printAsVectorHTML(copies, templateName) {
       const widthMM = this.pageWidthMM;
@@ -1143,15 +1408,7 @@
       .bs-print-text{line-height:1;white-space:nowrap}
       svg{shape-rendering:crispEdges}
     </style></head><body><div class="sheet">${content}</div></body></html>`;
-      const win = window.open("about:blank");
-      if (!win) {
-        frappe.msgprint(__("Popup blocked. Allow popups for printing."));
-        return;
-      }
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      win.print();
+      await this._printHtmlInCurrentTab(html);
     }
     async print({ mode = "html", copies = 1, dpi = 300, templateName = null } = {}) {
       if (!this.fabricCanvas) {
@@ -1539,12 +1796,8 @@
         body.toggle(!hidden);
         $("#bs-toggle-fields").text(hidden ? "Show" : "Hide");
       });
-      $("#bs-toggle-props").on("click", () => {
-        const body = $("#bs-props-box .body");
-        const hidden = body.is(":visible");
-        body.toggle(!hidden);
-        $("#bs-toggle-props").text(hidden ? "Show" : "Hide");
-      });
+      $("#bs-toggle-props").on("click", () => this.setPropertiesPanelVisible(false));
+      $("#bs-show-props").on("click", () => this.setPropertiesPanelVisible(true));
       $("#bs-field-search").on("input", (event) => {
         this.buildFieldPalette(event.target.value || "");
       });
@@ -1571,6 +1824,10 @@
       $("#bs-save").on("click", () => this.saveTemplateDialog());
       $("#bs-add-text").on("click", () => this.canvas.addComponent("text"));
       $("#bs-add-barcode").on("click", () => this.canvas.addComponent("barcode"));
+      $("#bs-zoom-out").on("click", () => this.canvas.setZoom(this.canvas.scale - 0.1, { persist: true }));
+      $("#bs-zoom-in").on("click", () => this.canvas.setZoom(this.canvas.scale + 0.1, { persist: true }));
+      $("#bs-zoom-reset").on("click", () => this.canvas.setZoom(1, { persist: true }));
+      $("#bs-zoom").on("input change", (event) => this.canvas.setZoom((Number.parseInt(event.target.value, 10) || 100) / 100, { persist: true }));
       $("#bs-unit").on("change", (event) => this.setDimensionUnit(event.target.value, { persist: true, refresh: true }));
       $("#bs-toggle-grid").on("click", () => this.toggleGrid());
       $("#bs-snap").on("change", (event) => this.canvas.setSnap(event.target.value || 1, { persist: true }));
@@ -1639,11 +1896,26 @@
       const grid = !!this.state.get("grid", false);
       const snap = this.state.get("snap", 1);
       const unit = this.state.get("unit", BARCODE_STUDIO_DEFAULT_UNIT);
+      const propsVisible = !this.state.get("props_collapsed", false);
       this.toggleTheme(dark, { persist: false });
       this.setDimensionUnit(unit, { persist: false, refresh: true });
+      this.setPropertiesPanelVisible(propsVisible, { persist: false });
       this.canvas.setSnap(snap, { persist: false });
       this.canvas.toggleGrid(grid, { persist: false });
       $("#bs-snap-label").text(`${this.canvas.snapMM}mm`);
+    }
+    setPropertiesPanelVisible(visible, { persist = true } = {}) {
+      var _a2, _b, _c, _d, _e, _f;
+      const isVisible = !!visible;
+      $(".bs-layout").toggleClass("props-collapsed", !isVisible);
+      $("#bs-toggle-props").text(isVisible ? "Hide" : "Show");
+      $("#bs-show-props").toggle(!isVisible);
+      (_c = (_b = (_a2 = this.canvas) == null ? void 0 : _a2.fabricCanvas) == null ? void 0 : _b.calcOffset) == null ? void 0 : _c.call(_b);
+      (_f = (_e = (_d = this.canvas) == null ? void 0 : _d.fabricCanvas) == null ? void 0 : _e.requestRenderAll) == null ? void 0 : _f.call(_e);
+      if (persist) {
+        this.state.set({ props_collapsed: !isVisible });
+      }
+      return isVisible;
     }
     toggleTheme(force, { persist = true } = {}) {
       const enabled = typeof force === "boolean" ? force : !document.body.classList.contains("dark");
@@ -2090,4 +2362,4 @@
   window.mysysBarcodeStudio = window.mysysBarcodeStudio || {};
   window.mysysBarcodeStudio.mountBarcodeStudio = mountBarcodeStudio;
 })();
-//# sourceMappingURL=barcode_studio.bundle.Q3CB3GEM.js.map
+//# sourceMappingURL=barcode_studio.bundle.QJ5YKIA4.js.map

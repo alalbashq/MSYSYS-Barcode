@@ -567,6 +567,98 @@ mysys.qbp.Page = class {
   /* =========================================================
    * Print
    * =======================================================*/
+  _printHtmlInCurrentTab(html) {
+    return new Promise((resolve) => {
+      const frame = document.createElement("iframe");
+      Object.assign(frame.style, {
+        position: "fixed",
+        right: "0",
+        bottom: "0",
+        width: "0",
+        height: "0",
+        border: "0",
+        visibility: "hidden",
+      });
+      frame.setAttribute("aria-hidden", "true");
+      document.body.appendChild(frame);
+
+      let cleaned = false;
+      let didPrint = false;
+      let started = false;
+      let fallbackTimer = null;
+
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        if (fallbackTimer) window.clearTimeout(fallbackTimer);
+        window.removeEventListener("focus", onFocus);
+        try {
+          frame.remove();
+        } catch {
+          // ignore cleanup errors
+        }
+        resolve();
+      };
+
+      const onFocus = () => {
+        if (didPrint) window.setTimeout(cleanup, 500);
+      };
+
+      const fail = () => {
+        cleanup();
+        frappe.msgprint(__('Unable to open print preview.'));
+      };
+
+      const printWindow = frame.contentWindow;
+      const doc = frame.contentDocument || printWindow?.document;
+      if (!printWindow || !doc) {
+        fail();
+        return;
+      }
+
+      const startPrint = () => {
+        if (started || cleaned) return;
+        started = true;
+        didPrint = true;
+        printWindow.onafterprint = cleanup;
+        window.addEventListener("focus", onFocus);
+        fallbackTimer = window.setTimeout(cleanup, 120000);
+
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch (error) {
+          console.error('print failed', error);
+          fail();
+        }
+      };
+
+      const waitForAssetsThenPrint = () => {
+        const images = Array.from(doc.images || []).filter((img) => !img.complete);
+        if (!images.length) {
+          window.setTimeout(startPrint, 50);
+          return;
+        }
+
+        let pending = images.length;
+        const done = () => {
+          pending -= 1;
+          if (pending <= 0) window.setTimeout(startPrint, 50);
+        };
+        for (const image of images) {
+          image.addEventListener("load", done, { once: true });
+          image.addEventListener("error", done, { once: true });
+        }
+        window.setTimeout(startPrint, 1500);
+      };
+
+      doc.open();
+      doc.write(html);
+      doc.close();
+      window.setTimeout(waitForAssetsThenPrint, 100);
+    });
+  }
+
   async direct_print(){
     const rows = this._collect_rows();
     if (!rows.length) { return frappe.msgprint(__('No rows selected')); }
@@ -614,8 +706,7 @@ mysys.qbp.Page = class {
       svg{shape-rendering:crispEdges}
     </style></head><body><div class="sheet">${labels.join('')}</div></body></html>`;
 
-    const w = window.open("about:blank");
-    w.document.write(html); w.document.close(); w.focus(); w.print();
+    await this._printHtmlInCurrentTab(html);
 
     // (اختياري) استدعِ API للتسجيل؛ ولو فشل ممكن تعمل rollback بإزالة العلامات
     // try { await frappe.call({ method:'...', args:{ ... } }); }

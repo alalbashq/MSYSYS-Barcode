@@ -963,6 +963,7 @@ def qbp_rows_extra(
 				e.update(base)  # brand, item_group
 			alt = altbc_by_code.get(ic)
 			if alt:
+				e["barcode"] = alt
 				e["alt_barcode"] = alt
 			extras[r["name"]] = e
 

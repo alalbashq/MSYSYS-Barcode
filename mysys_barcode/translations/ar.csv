@@ -1,0 +1,107 @@
+MYSYS Barcode,نظام الباركود
+Barcode Studio,استوديو الباركود
+Quick Barcode Print,طباعة الباركود السريعة
+Barcode Template,قالب الباركود
+Barcode Templates,قوالب الباركود
+Barcode DocType,نوع مستند الباركود
+Barcode DocTypes,أنواع مستندات الباركود
+Barcode Settings,إعدادات الباركود
+Print Barcode Settings,إعدادات طباعة الباركود
+Barcode Print Log,سجل طباعة الباركود
+Barcode,باركود
+Barcodes,الباركودات
+Template,القالب
+Templates,القوالب
+Setup,الإعداد
+Configuration,التهيئة
+Print Logs,سجلات الطباعة
+Settings,الإعدادات
+Document,المستند
+Fields,الحقول
+Field,الحقل
+Properties,الخصائص
+Show Properties,إظهار الخصائص
+Hide,إخفاء
+Show,إظهار
+Design,التصميم
+Preview,المعاينة
+Actual sticker size in printer units,حجم الاستيكر الفعلي بوحدات الطابعة
+Insert,إدراج
+Text,نص
+Clear,مسح
+Clear Value,مسح القيمة
+Zoom,تكبير
+Guides,الأدلة
+Grid,الشبكة
+Sticker,الاستيكر
+Apply,تطبيق
+Print,طباعة
+Reload,إعادة تحميل
+Save,حفظ
+Search fields...,ابحث في الحقول...
+Search fields…,ابحث في الحقول...
+Collapse All,طي الكل
+Expand All,توسيع الكل
+Align,محاذاة
+Label,التسمية
+Source Level,مستوى المصدر
+Child Table,جدول فرعي
+Child DocType,نوع المستند الفرعي
+Binding Key,مفتاح الربط
+Display Label,تسمية العرض
+Field Type,نوع الحقل
+Sample Value,قيمة تجريبية
+Hidden,مخفي
+Display Value,إظهار القيمة
+Barcode Format,صيغة الباركود
+Select an object,حدد عنصرًا
+No fields,لا توجد حقول
+Quick access to barcode design and printing tools.,وصول سريع لأدوات تصميم وطباعة الباركود.
+Open Barcode Studio,فتح استوديو الباركود
+Open Quick Print,فتح الطباعة السريعة
+Customer,العميل
+Date,التاريخ
+Company,الشركة
+Output,المخرج
+DPI,الدقة
+Copies,النسخ
+Page (mm),الصفحة (مم)
+Select All,تحديد الكل
+Items,الأصناف
+Item,الصنف
+Qty,الكمية
+Label Copies,نسخ الملصق
+Action,إجراء
+Add,إضافة
+No items,لا توجد أصناف
+Studio,الاستوديو
+Reload Template,إعادة تحميل القالب
+Refresh Row Data,تحديث بيانات الصف
+Show only unprinted,عرض غير المطبوعة فقط
+Reset marks,إعادة تعيين العلامات
+Printed,تمت الطباعة
+No items selected,لم يتم تحديد أصناف
+No rows selected,لم يتم تحديد صفوف
+Select a template,اختر قالبًا
+Select a template first.,اختر قالبًا أولًا.
+Template has no layout.,القالب لا يحتوي على تخطيط.
+Template reloaded.,تمت إعادة تحميل القالب.
+Template saved,تم حفظ القالب
+Template updated,تم تحديث القالب
+Unable to save template.,تعذر حفظ القالب.
+Unable to prepare Barcode Studio data.,تعذر تجهيز بيانات استوديو الباركود.
+Opening the first selected item in Barcode Studio.,سيتم فتح أول صنف محدد في استوديو الباركود.
+No Barcode DocType configuration found for this DocType. Please create one first.,لا يوجد إعداد نوع مستند باركود لهذا النوع. الرجاء إنشاؤه أولًا.
+Popup blocked. Allow popups for printing.,تم حظر النافذة المنبثقة. اسمح بالنوافذ المنبثقة للطباعة.
+Unable to open print preview.,تعذر فتح معاينة الطباعة.
+Delivery Note,إذن تسليم
+Material Request,طلب مواد
+Purchase Receipt,استلام شراء
+Purchase Invoice,فاتورة شراء
+Sales Invoice,فاتورة مبيعات
+Sales Order,أمر بيع
+Purchase Order,أمر شراء
+Stock Entry,قيد مخزون
+Stock Reconciliation,تسوية المخزون
+Pick List,قائمة الالتقاط
+Packing Slip,قسيمة التعبئة
