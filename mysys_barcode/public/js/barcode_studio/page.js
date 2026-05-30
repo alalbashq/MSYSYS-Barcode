@@ -53,6 +53,7 @@ export class BarcodeStudioPage {
     this._warnedBindings = new Set();
     this.canvas = new BarcodeStudioCanvasController(this);
     this.canvasClearButton = null;
+    this.layoutDirection = this.getLayoutDirection();
 
     this.initPage();
     this.bindUi();
@@ -89,6 +90,21 @@ export class BarcodeStudioPage {
 
   getDimensionStep(unit = this.getDimensionUnit()) {
     return this.getDimensionConfig(unit).step;
+  }
+
+  getLayoutDirection() {
+    return frappe.utils?.is_rtl?.(frappe.boot?.lang) ? "rtl" : "ltr";
+  }
+
+  applyLayoutDirection() {
+    this.layoutDirection = this.getLayoutDirection();
+    const isRTL = this.layoutDirection === "rtl";
+    this.page?.wrapper
+      ?.attr("dir", this.layoutDirection)
+      ?.toggleClass("bs-rtl", isRTL)
+      ?.toggleClass("bs-ltr", !isRTL);
+    this.page?.wrapper?.find("#bs-studio-root").attr("dir", this.layoutDirection);
+    return this.layoutDirection;
   }
 
   refreshDimensionControls() {
@@ -233,7 +249,7 @@ export class BarcodeStudioPage {
   initPage() {
     this.page = frappe.ui.make_app_page({
       parent: this.wrapper,
-      title: "Barcode Studio",
+      title: __("Barcode Studio"),
       single_column: true,
     });
 
@@ -242,15 +258,17 @@ export class BarcodeStudioPage {
       docname: this.docname || "",
       width_mm: this.pageWidthMM,
       height_mm: this.pageHeightMM,
+      layout_direction: this.getLayoutDirection(),
     };
 
     const tplName = "barcode_studio";
     const tplSrc = frappe.templates?.[tplName];
     const html = tplSrc
       ? frappe.render_template(tplSrc, ctx)
-      : "<div class='alert alert-danger m-3'>Template not built. Run <code>bench build</code>.</div>";
+      : `<div class='alert alert-danger m-3'>${__("Template not built. Run")} <code>bench build</code>.</div>`;
 
     this.page.wrapper.find(".page-body").html(html);
+    this.applyLayoutDirection();
     $("#bs-dt").val(this.doctype);
     $("#bs-name").val(this.docname);
     this.refreshDimensionControls();
@@ -276,7 +294,7 @@ export class BarcodeStudioPage {
       const body = $("#bs-fields-box .body");
       const hidden = body.is(":visible");
       body.toggle(!hidden);
-      $("#bs-toggle-fields").text(hidden ? "Show" : "Hide");
+      $("#bs-toggle-fields").text(hidden ? __("Show") : __("Hide"));
     });
 
     $("#bs-toggle-props").on("click", () => this.setPropertiesPanelVisible(false));
@@ -299,7 +317,7 @@ export class BarcodeStudioPage {
         stored[ct] = el.classList.contains("open");
       });
       localStorage.setItem(uiKey, JSON.stringify(stored));
-      $("#bs-fields-collapse-toggle").text(anyOpen ? "Expand All" : "Collapse All");
+      $("#bs-fields-collapse-toggle").text(anyOpen ? __("Expand All") : __("Collapse All"));
     });
 
     $("#bs-apply").on("click", () => this.applyPage());
@@ -387,6 +405,7 @@ export class BarcodeStudioPage {
     const unit = this.state.get("unit", BARCODE_STUDIO_DEFAULT_UNIT);
     const propsVisible = !this.state.get("props_collapsed", false);
 
+    this.applyLayoutDirection();
     this.toggleTheme(dark, { persist: false });
     this.setDimensionUnit(unit, { persist: false, refresh: true });
     this.setPropertiesPanelVisible(propsVisible, { persist: false });
@@ -398,7 +417,7 @@ export class BarcodeStudioPage {
   setPropertiesPanelVisible(visible, { persist = true } = {}) {
     const isVisible = !!visible;
     $(".bs-layout").toggleClass("props-collapsed", !isVisible);
-    $("#bs-toggle-props").text(isVisible ? "Hide" : "Show");
+    $("#bs-toggle-props").text(isVisible ? __("Hide") : __("Show"));
     $("#bs-show-props").toggle(!isVisible);
     this.canvas?.fabricCanvas?.calcOffset?.();
     this.canvas?.fabricCanvas?.requestRenderAll?.();
@@ -523,7 +542,7 @@ export class BarcodeStudioPage {
         method: "frappe.client.get_list",
         args: { doctype: "Barcode Template", fields: ["name"], limit_page_length: 200 },
       });
-      const select = $("#bs-template").empty().append("<option value=''>-- Template --</option>");
+      const select = $("#bs-template").empty().append(`<option value="">-- ${__("Template")} --</option>`);
       for (const item of response.message || []) {
         select.append(`<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`);
       }
@@ -544,14 +563,15 @@ export class BarcodeStudioPage {
 
     if (this.configMessage) {
       $panel.html(`<div class="text-muted small">${escapeHtml(this.configMessage)}</div>`);
-      $("#bs-fields-collapse-toggle").text("Expand All");
+      $("#bs-fields-collapse-toggle").text(__("Expand All"));
       return;
     }
 
     const makeChip = (label, dataset, pathShown) => {
+      const displayLabel = __(label || "");
       const chip = $(`
         <div class="bs-field-chip" draggable="true" title="${escapeHtml(pathShown || dataset.path || "")}">
-          <div class="label">${escapeHtml(label || "")}</div>
+          <div class="label">${escapeHtml(displayLabel)}</div>
           <div class="path">${escapeHtml(pathShown || dataset.path || "")}</div>
         </div>
       `);
@@ -583,9 +603,9 @@ export class BarcodeStudioPage {
       const group = $(`
         <div class="bs-field-group ${open ? "open" : ""}" ${groupClass ? `data-ct="${escapeHtml(groupClass)}"` : ""}>
           <div class="fg-head">
-            <div class="fg-title">${escapeHtml(title)}</div>
+            <div class="fg-title">${escapeHtml(__(title || ""))}</div>
             <div class="fg-actions${hasToggle ? "" : " text-muted small"}">
-              ${hasToggle ? `<button class="btn btn-xs btn-light fg-toggle" type="button">${open ? "−" : "+"}</button>` : "Fields"}
+              ${hasToggle ? `<button class="btn btn-xs btn-light fg-toggle" type="button">${open ? "−" : "+"}</button>` : __("Fields")}
             </div>
           </div>
           <div class="fg-body"><div class="d-flex flex-wrap"></div></div>
@@ -660,18 +680,18 @@ export class BarcodeStudioPage {
     }
 
     if (documentFields.length) {
-      makeGroup("Document", "", true, documentFields, false);
+      makeGroup(__("Document"), "", true, documentFields, false);
     }
     for (const [groupKey, groupInfo] of childGroups.entries()) {
       makeGroup(groupInfo.title, groupKey, groupInfo.open, groupInfo.items);
     }
 
     if (!$panel.children().length) {
-      $panel.html("<div class='text-muted'>No fields</div>");
+      $panel.html(`<div class="text-muted">${__("No fields")}</div>`);
     }
 
     const anyOpen = $(".bs-field-group[data-ct]").toArray().some((el) => el.classList.contains("open"));
-    $("#bs-fields-collapse-toggle").text(anyOpen ? "Collapse All" : "Expand All");
+    $("#bs-fields-collapse-toggle").text(anyOpen ? __("Collapse All") : __("Expand All"));
   }
 
   applyPage() {
@@ -731,7 +751,7 @@ export class BarcodeStudioPage {
         {
           fieldname: "template_name",
           fieldtype: "Data",
-          label: "Template Name",
+          label: __("Template Name"),
           reqd: 1,
           default: this.templateName || "",
           read_only: isEdit ? 1 : 0,
@@ -739,14 +759,14 @@ export class BarcodeStudioPage {
         {
           fieldname: "page_width_mm",
           fieldtype: "Float",
-          label: `Width (${unitLabel})`,
+          label: `${__("Width")} (${unitLabel})`,
           reqd: 1,
           default: this.formatDimension(this.canvas.pageWidthMM, unit),
         },
         {
           fieldname: "page_height_mm",
           fieldtype: "Float",
-          label: `Height (${unitLabel})`,
+          label: `${__("Height")} (${unitLabel})`,
           reqd: 1,
           default: this.formatDimension(this.canvas.pageHeightMM, unit),
         },

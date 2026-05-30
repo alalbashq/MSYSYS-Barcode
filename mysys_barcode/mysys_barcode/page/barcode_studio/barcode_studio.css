@@ -6,6 +6,37 @@
   background: #f6f8fb;
 }
 
+.bs-studio-root {
+  max-width: 100%;
+}
+
+#page-barcode-studio.bs-rtl,
+#page-barcode-studio.bs-ltr {
+  unicode-bidi: isolate;
+}
+
+#page-barcode-studio.bs-rtl {
+  direction: rtl;
+}
+
+#page-barcode-studio.bs-ltr {
+  direction: ltr;
+}
+
+#page-barcode-studio.bs-rtl input,
+#page-barcode-studio.bs-rtl select,
+#page-barcode-studio.bs-rtl textarea,
+#page-barcode-studio.bs-rtl .bs-field-chip {
+  text-align: right;
+}
+
+#page-barcode-studio.bs-ltr input,
+#page-barcode-studio.bs-ltr select,
+#page-barcode-studio.bs-ltr textarea,
+#page-barcode-studio.bs-ltr .bs-field-chip {
+  text-align: left;
+}
+
 @media (min-width: 1200px) {
   #page-barcode-studio .container-xl,
   #page-barcode-studio .container-lg,
@@ -33,11 +64,13 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  justify-content: flex-start;
 }
 
 .bs-toolbar-cluster,
 .bs-group {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 7px;
   min-height: 40px;
@@ -48,7 +81,7 @@
 }
 
 .bs-print-cluster {
-  margin-left: auto;
+  margin-inline-start: 0;
 }
 
 .bs-toolbar-label,
@@ -216,7 +249,7 @@
 
 .bs-props-restore {
   display: none;
-  margin-left: auto;
+  margin-inline-start: auto;
   white-space: nowrap;
 }
 
@@ -227,6 +260,7 @@
 .bs-center-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+  grid-template-areas: "design preview";
   gap: 12px;
   min-height: 0;
   flex: 1;
@@ -235,6 +269,14 @@
 .bs-pane {
   display: flex;
   flex-direction: column;
+}
+
+.bs-design-pane {
+  grid-area: design;
+}
+
+.bs-preview-column {
+  grid-area: preview;
 }
 
 .bs-pane-head,
@@ -580,7 +622,7 @@
   }
 
   .bs-center-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.78fr);
   }
 
   .bs-layout.props-collapsed {
@@ -614,5 +656,8 @@
 
   .bs-center-grid {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "design"
+      "preview";
   }
 }

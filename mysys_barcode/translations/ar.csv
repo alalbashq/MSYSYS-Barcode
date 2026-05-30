@@ -10,6 +10,8 @@ Print Barcode Settings,إعدادات طباعة الباركود
 Barcode Print Log,سجل طباعة الباركود
 Barcode,باركود
 Barcodes,الباركودات
+barcodes,الباركودات
+items,الأصناف
 Template,القالب
 Templates,القوالب
 Setup,الإعداد
@@ -54,6 +56,22 @@ Sample Value,قيمة تجريبية
 Hidden,مخفي
 Display Value,إظهار القيمة
 Barcode Format,صيغة الباركود
+Auto,تلقائي
+Font Weight,وزن الخط
+Normal,عادي
+Bold,عريض
+Italic,مائل
+Bold Italic,عريض مائل
+Display Text,النص المعروض
+Text Position,موضع النص
+Text Margin,هامش النص
+Font Options,خيارات الخط
+Font,الخط
+Line Color,لون الخط
+Background,الخلفية
+Margin,الهامش
+Flat,مسطح
+EAN-128,EAN-128
 Select an object,حدد عنصرًا
 No fields,لا توجد حقول
 Quick access to barcode design and printing tools.,وصول سريع لأدوات تصميم وطباعة الباركود.
@@ -69,6 +87,11 @@ Page (mm),الصفحة (مم)
 Select All,تحديد الكل
 Items,الأصناف
 Item,الصنف
+Name,الاسم
+Item Code,رمز الصنف
+Item Name,اسم الصنف
+Standard Selling Rate,سعر البيع القياسي
+Stock UOM,وحدة القياس
 Qty,الكمية
 Label Copies,نسخ الملصق
 Action,إجراء
@@ -94,6 +117,61 @@ Opening the first selected item in Barcode Studio.,سيتم فتح أول صنف
 No Barcode DocType configuration found for this DocType. Please create one first.,لا يوجد إعداد نوع مستند باركود لهذا النوع. الرجاء إنشاؤه أولًا.
 Popup blocked. Allow popups for printing.,تم حظر النافذة المنبثقة. اسمح بالنوافذ المنبثقة للطباعة.
 Unable to open print preview.,تعذر فتح معاينة الطباعة.
+Add Text,إضافة نص
+Add Barcode,إضافة باركود
+Zoom In,تكبير
+Zoom Out,تصغير
+Reset,إعادة ضبط
+Reset Zoom,إعادة ضبط التكبير
+Snap,الالتقاط
+Document Name,اسم المستند
+Collapse/Expand All,طي/توسيع الكل
+Fullscreen,ملء الشاشة
+Dark/Light,داكن/فاتح
+Measurement unit,وحدة القياس
+HTML (Vector),HTML (متجه)
+Image (HiDPI),صورة (دقة عالية)
+Image DPI,دقة الصورة
+300 DPI,300 DPI
+600 DPI,600 DPI
+96 DPI,96 DPI
+Align Left,محاذاة لليسار
+Align Center,توسيط أفقي
+Align Right,محاذاة لليمين
+Align Top,محاذاة للأعلى
+Align Middle,توسيط عمودي
+Align Bottom,محاذاة للأسفل
+Text Left,يسار النص
+Text Center,وسط النص
+Text Right,يمين النص
+Text Align,محاذاة النص
+L,يسار
+C,وسط
+R,يمين
+W x H,العرض × الارتفاع
+Template Name,اسم القالب
+Template not built. Run,القالب غير مبني. شغّل
+Canvas is not ready.,لوحة التصميم غير جاهزة.
+Label preview,معاينة الملصق
+New Text,نص جديد
+Width,العرض
+Height,الارتفاع
+Left,اليسار
+Top,الأعلى
+Right,اليمين
+Center,الوسط
+Bottom,الأسفل
+Justify,ضبط
+Font Size,حجم الخط
+Value,القيمة
+Bar Width,عرض الباركود
+Bar Height,ارتفاع الباركود
+Margin Top,الهامش العلوي
+Margin Right,الهامش الأيمن
+Margin Bottom,الهامش السفلي
+Margin Left,الهامش الأيسر
+No,لا
+Yes,نعم
 Delivery Note,إذن تسليم
 Material Request,طلب مواد
 Purchase Receipt,استلام شراء

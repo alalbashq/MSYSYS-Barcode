@@ -895,3 +895,5 @@ frappe.route_options
 value = renderData[binding_key];
 
 أي منطق متعلق بقراءة المستند أو الجداول الفرعية أو اختيار أول صف يتم خارج Barcode Studio، في الدالة أو API التي تجهز route_options قبل فتح الصفحة.
+
+

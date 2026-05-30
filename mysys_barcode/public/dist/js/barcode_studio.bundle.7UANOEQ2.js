@@ -48,6 +48,9 @@
     fontSize: "font_size_mm",
     barWidth: "bar_width_mm",
     barHeight: "bar_height_mm",
+    textMargin: "text_margin_mm",
+    barcodeFontSize: "barcode_font_size_mm",
+    margin: "margin_mm",
     marginTop: "margin_top_mm",
     marginRight: "margin_right_mm",
     marginBottom: "margin_bottom_mm",
@@ -204,6 +207,13 @@
     }
     _sizeMm(value) {
       return `${this._pxToMm(value).toFixed(3)} mm`;
+    }
+    _labelWithUnit(label, unitLabel) {
+      return `${__(label)} (${unitLabel})`;
+    }
+    _pageDirection() {
+      var _a2, _b, _c;
+      return ((_a2 = this.page) == null ? void 0 : _a2.layoutDirection) || ((_c = (_b = this.page) == null ? void 0 : _b.getLayoutDirection) == null ? void 0 : _c.call(_b)) || "ltr";
     }
     _currentObjectWidthMm(obj) {
       var _a2, _b, _c;
@@ -591,7 +601,7 @@
       });
     }
     _designText(metadata, fallback = "Text") {
-      return metadata.label || metadata.fieldname || metadata.binding_key || fallback;
+      return metadata.label || metadata.fieldname || metadata.binding_key || __(fallback);
     }
     _isBarcodeMetadata(metadata = {}) {
       const fieldtype = String(metadata.fieldtype || "").toLowerCase();
@@ -646,10 +656,22 @@
           "barWidth",
           "barHeight",
           "displayValue",
+          "barcodeText",
+          "barcodeTextAlign",
+          "textPosition",
+          "textMargin",
+          "barcodeFontSize",
+          "fontOptions",
+          "barcodeFont",
+          "background",
+          "lineColor",
+          "margin",
           "marginTop",
           "marginRight",
           "marginBottom",
           "marginLeft",
+          "flat",
+          "ean128",
           "boxWidth",
           "boxHeight"
         ];
@@ -686,36 +708,18 @@
           const nextValue = this.page.getElementDisplayValue(source, "preview");
           const boxWidth = source.boxWidth || source.getScaledWidth() || source.width || 0;
           const boxHeight = source.boxHeight || source.getScaledHeight() || source.height || 0;
-          clone.set({
+          const barcodeState = this._barcodeStateFromSource(source);
+          clone.set(__spreadProps(__spreadValues({
             barcodeValue: nextValue,
             baseBarcodeValue: baseValue,
             bindField: source.binding_key || source.bindField || "",
             binding_key: source.binding_key || source.bindField || "",
-            customType: "barcode",
-            format: source.format || "CODE128",
-            barWidth: source.barWidth || 2,
-            barHeight: source.barHeight || 60,
-            displayValue: !!source.displayValue,
-            marginTop: source.marginTop || 0,
-            marginRight: source.marginRight || 0,
-            marginBottom: source.marginBottom || 0,
-            marginLeft: source.marginLeft || 0,
+            customType: "barcode"
+          }, barcodeState), {
             boxWidth,
             boxHeight
-          });
-          const url = this._barcodeDataURL(
-            nextValue || " ",
-            source.format || "CODE128",
-            toNumber(source.barWidth, 2),
-            toNumber(source.barHeight, 60),
-            !!source.displayValue,
-            {
-              mt: toNumber(source.marginTop, 0),
-              mr: toNumber(source.marginRight, 0),
-              mb: toNumber(source.marginBottom, 0),
-              ml: toNumber(source.marginLeft, 0)
-            }
-          );
+          }));
+          const url = this._barcodeDataURL(nextValue || " ", this._barcodeRenderOptions(clone));
           await this._setImageSource(clone, url, boxWidth, boxHeight);
         }
         previewCanvas.add(clone);
@@ -737,41 +741,117 @@
         return `${value}`;
       }
     }
-    _barcodeDataURL(value, format, width, height, displayValue, margins = { mt: 0, mr: 0, mb: 0, ml: 0 }) {
+    _boolOption(value, fallback = false) {
+      if (value === void 0 || value === null || value === "")
+        return fallback;
+      if (typeof value === "string") {
+        return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+      }
+      return !!value;
+    }
+    _barcodeFormats() {
+      return [
+        "auto",
+        "CODE128",
+        "CODE128A",
+        "CODE128B",
+        "CODE128C",
+        "EAN13",
+        "EAN8",
+        "EAN5",
+        "EAN2",
+        "UPC",
+        "UPCE",
+        "CODE39",
+        "ITF14",
+        "ITF",
+        "MSI",
+        "MSI10",
+        "MSI11",
+        "MSI1010",
+        "MSI1110",
+        "pharmacode",
+        "codabar"
+      ];
+    }
+    _barcodeFormatOptions() {
+      return this._barcodeFormats().map((value) => ({
+        value,
+        label: value === "auto" ? __("Auto") : value
+      }));
+    }
+    _barcodeStateFromSource(source = {}) {
+      var _a2;
+      return {
+        format: source.format || "CODE128",
+        barWidth: this._layoutValuePx(source, "barWidth", 2),
+        barHeight: this._layoutValuePx(source, "barHeight", 60),
+        displayValue: this._boolOption(source.displayValue, false),
+        barcodeText: this._toStr((_a2 = source.barcodeText) != null ? _a2 : ""),
+        barcodeTextAlign: source.barcodeTextAlign || "center",
+        textPosition: source.textPosition || "bottom",
+        textMargin: this._layoutValuePx(source, "textMargin", 2),
+        barcodeFontSize: this._layoutValuePx(source, "barcodeFontSize", 20),
+        fontOptions: source.fontOptions || "",
+        barcodeFont: source.barcodeFont || "monospace",
+        background: source.background || "#ffffff",
+        lineColor: source.lineColor || "#000000",
+        margin: this._layoutValuePx(source, "margin", 0),
+        marginTop: this._layoutValuePx(source, "marginTop", 0),
+        marginRight: this._layoutValuePx(source, "marginRight", 0),
+        marginBottom: this._layoutValuePx(source, "marginBottom", 0),
+        marginLeft: this._layoutValuePx(source, "marginLeft", 0),
+        flat: this._boolOption(source.flat, false),
+        ean128: this._boolOption(source.ean128, false)
+      };
+    }
+    _barcodeRenderOptions(source = {}) {
+      const state = this._barcodeStateFromSource(source);
+      const options = {
+        format: state.format,
+        width: Math.max(1, Math.round(toNumber(state.barWidth, 2))),
+        height: Math.max(1, Math.round(toNumber(state.barHeight, 60))),
+        displayValue: state.displayValue,
+        textAlign: state.barcodeTextAlign,
+        textPosition: state.textPosition,
+        textMargin: Math.max(0, Math.round(toNumber(state.textMargin, 2))),
+        fontSize: Math.max(1, Math.round(toNumber(state.barcodeFontSize, 20))),
+        fontOptions: state.fontOptions,
+        font: state.barcodeFont,
+        background: state.background,
+        lineColor: state.lineColor,
+        margin: Math.max(0, Math.round(toNumber(state.margin, 0))),
+        marginTop: Math.max(0, Math.round(toNumber(state.marginTop, 0))),
+        marginRight: Math.max(0, Math.round(toNumber(state.marginRight, 0))),
+        marginBottom: Math.max(0, Math.round(toNumber(state.marginBottom, 0))),
+        marginLeft: Math.max(0, Math.round(toNumber(state.marginLeft, 0))),
+        flat: state.flat,
+        ean128: state.ean128
+      };
+      if (state.barcodeText) {
+        options.text = state.barcodeText;
+      }
+      return options;
+    }
+    _barcodeDataURL(value, options = {}) {
       const tmp = document.createElement("canvas");
       try {
-        JsBarcode(tmp, value || " ", {
-          format,
-          width: Math.max(1, Math.round(width || 1)),
-          height: Math.max(1, Math.round(height || 1)),
-          displayValue
-        });
+        JsBarcode(tmp, value || " ", options);
       } catch (e) {
+        tmp.width = 1;
+        tmp.height = 1;
+        const ctx = tmp.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = options.background || "#ffffff";
+          ctx.fillRect(0, 0, tmp.width, tmp.height);
+        }
       }
-      const mt = Math.max(0, Math.round(margins.mt || 0));
-      const mr = Math.max(0, Math.round(margins.mr || 0));
-      const mb = Math.max(0, Math.round(margins.mb || 0));
-      const ml = Math.max(0, Math.round(margins.ml || 0));
-      const out = document.createElement("canvas");
-      out.width = tmp.width + ml + mr;
-      out.height = tmp.height + mt + mb;
-      const ctx = out.getContext("2d");
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, out.width, out.height);
-      ctx.drawImage(tmp, ml, mt);
-      return out.toDataURL();
+      return tmp.toDataURL();
     }
     _barcodeSignature(obj) {
       return JSON.stringify([
         obj.barcodeValue || "",
-        obj.format || "CODE128",
-        Number(toNumber(obj.barWidth, 2).toFixed(3)),
-        Number(toNumber(obj.barHeight, 60).toFixed(3)),
-        !!obj.displayValue,
-        Number(toNumber(obj.marginTop, 0).toFixed(3)),
-        Number(toNumber(obj.marginRight, 0).toFixed(3)),
-        Number(toNumber(obj.marginBottom, 0).toFixed(3)),
-        Number(toNumber(obj.marginLeft, 0).toFixed(3))
+        this._barcodeRenderOptions(obj)
       ]);
     }
     _fitImageToBox(img, width, height) {
@@ -817,19 +897,7 @@
       if (obj._barcodeSignature === signature)
         return;
       obj._barcodeSignature = signature;
-      const url = this._barcodeDataURL(
-        obj.barcodeValue || " ",
-        obj.format || "CODE128",
-        toNumber(obj.barWidth, 2),
-        toNumber(obj.barHeight, 60),
-        !!obj.displayValue,
-        {
-          mt: toNumber(obj.marginTop, 0),
-          mr: toNumber(obj.marginRight, 0),
-          mb: toNumber(obj.marginBottom, 0),
-          ml: toNumber(obj.marginLeft, 0)
-        }
-      );
+      const url = this._barcodeDataURL(obj.barcodeValue || " ", this._barcodeRenderOptions(obj));
       const boxWidth = obj.boxWidth || obj.getScaledWidth();
       const boxHeight = obj.boxHeight || obj.getScaledHeight();
       await this._setImageSource(obj, url, boxWidth, boxHeight);
@@ -908,7 +976,7 @@
     }
     addComponent(type) {
       if (type === "text")
-        this.addTextAt(20, 20, "New Text", "");
+        this.addTextAt(20, 20, __("New Text"), "");
       if (type === "barcode")
         this.addBarcodeAt(20, 20, "123456789012", "");
     }
@@ -937,33 +1005,23 @@
         return;
       const metadata = this._normalizeFieldPayload(metadataInput, value, typeof metadataInput === "string" ? metadataInput : "");
       const baseValue = value || "123456789012";
-      const format = "CODE128";
-      const barWidth = 2;
-      const barHeight = 60;
-      const url = this._barcodeDataURL(baseValue || " ", format, barWidth, barHeight, false, {
-        mt: 0,
-        mr: 0,
-        mb: 0,
-        ml: 0
+      const barcodeState = this._barcodeStateFromSource({
+        format: "CODE128",
+        barWidth: 2,
+        barHeight: 60,
+        displayValue: false
       });
+      const url = this._barcodeDataURL(baseValue || " ", this._barcodeRenderOptions(barcodeState));
       void this._loadFabricImage(url).then((img) => {
         if (!img)
           return;
-        img.set({
+        img.set(__spreadValues({
           left: x,
           top: y,
           customType: "barcode",
           barcodeValue: baseValue,
-          baseBarcodeValue: baseValue,
-          format,
-          barWidth,
-          barHeight,
-          displayValue: false,
-          marginTop: 0,
-          marginRight: 0,
-          marginBottom: 0,
-          marginLeft: 0
-        });
+          baseBarcodeValue: baseValue
+        }, barcodeState));
         this._applyElementMetadata(img, metadata);
         const box = this._defaultBarcodeBox(x, y);
         img.boxWidth = box.width;
@@ -1068,36 +1126,19 @@
           const hasBinding = !!metadata.binding_key;
           const renderedValue = hasBinding ? (_e = this.page.getRenderData()) == null ? void 0 : _e[metadata.binding_key] : "";
           const baseValue = hasBinding ? renderedValue || metadata.sample_value || item.baseBarcodeValue || item.barcodeValue || item.baseText || item.text || metadata.label || metadata.binding_key || "123456789012" : (_i = (_h = (_g = (_f = item.baseBarcodeValue) != null ? _f : item.barcodeValue) != null ? _g : item.baseText) != null ? _h : item.text) != null ? _i : "";
-          const url = this._barcodeDataURL(
-            baseValue || " ",
-            item.format || "CODE128",
-            this._layoutValuePx(item, "barWidth", 2),
-            this._layoutValuePx(item, "barHeight", 60),
-            !!item.displayValue,
-            {
-              mt: this._layoutValuePx(item, "marginTop", 0),
-              mr: this._layoutValuePx(item, "marginRight", 0),
-              mb: this._layoutValuePx(item, "marginBottom", 0),
-              ml: this._layoutValuePx(item, "marginLeft", 0)
-            }
-          );
+          const barcodeState = this._barcodeStateFromSource(item);
+          const url = this._barcodeDataURL(baseValue || " ", this._barcodeRenderOptions(barcodeState));
           const img = await this._loadFabricImage(url);
           if (!img)
             continue;
-          img.set(Object.assign({}, item, {
+          img.set(Object.assign({}, item, __spreadValues({
             left: this._layoutValuePx(item, "left", item.left || 0),
             top: this._layoutValuePx(item, "top", item.top || 0),
             type: "image",
             customType: "barcode",
             barcodeValue: baseValue,
-            baseBarcodeValue: baseValue,
-            barWidth: this._layoutValuePx(item, "barWidth", 2),
-            barHeight: this._layoutValuePx(item, "barHeight", 60),
-            marginTop: this._layoutValuePx(item, "marginTop", 0),
-            marginRight: this._layoutValuePx(item, "marginRight", 0),
-            marginBottom: this._layoutValuePx(item, "marginBottom", 0),
-            marginLeft: this._layoutValuePx(item, "marginLeft", 0)
-          }));
+            baseBarcodeValue: baseValue
+          }, barcodeState)));
           this._applyElementMetadata(img, metadata);
           img.boxWidth = this._layoutValuePx(item, "boxWidth", item.width || img.getScaledWidth());
           img.boxHeight = this._layoutValuePx(item, "boxHeight", item.height || img.getScaledHeight());
@@ -1150,24 +1191,41 @@
       }
       if (obj.customType === "barcode") {
         const baseValue = (_k = (_j = obj.baseBarcodeValue) != null ? _j : obj.barcodeValue) != null ? _k : "";
-        const barWidth = toNumber(obj.barWidth, 2);
-        const barHeight = toNumber(obj.barHeight, 60);
-        const marginTop = toNumber(obj.marginTop, 0);
-        const marginRight = toNumber(obj.marginRight, 0);
-        const marginBottom = toNumber(obj.marginBottom, 0);
-        const marginLeft = toNumber(obj.marginLeft, 0);
+        const barcodeState = this._barcodeStateFromSource(obj);
+        const barWidth = toNumber(barcodeState.barWidth, 2);
+        const barHeight = toNumber(barcodeState.barHeight, 60);
+        const textMargin = toNumber(barcodeState.textMargin, 2);
+        const barcodeFontSize = toNumber(barcodeState.barcodeFontSize, 20);
+        const margin = toNumber(barcodeState.margin, 0);
+        const marginTop = toNumber(barcodeState.marginTop, 0);
+        const marginRight = toNumber(barcodeState.marginRight, 0);
+        const marginBottom = toNumber(barcodeState.marginBottom, 0);
+        const marginLeft = toNumber(barcodeState.marginLeft, 0);
         const boxWidth = toNumber(obj.boxWidth || obj.getScaledWidth(), width);
         const boxHeight = toNumber(obj.boxHeight || obj.getScaledHeight(), height);
         return Object.assign(base, {
           src: obj.toDataURL(),
           barcodeValue: baseValue,
           baseBarcodeValue: baseValue,
-          format: obj.format || "CODE128",
+          format: barcodeState.format,
           barWidth,
           bar_width_mm: this._pxToMm(barWidth),
           barHeight,
           bar_height_mm: this._pxToMm(barHeight),
-          displayValue: !!obj.displayValue,
+          displayValue: barcodeState.displayValue,
+          barcodeText: barcodeState.barcodeText,
+          barcodeTextAlign: barcodeState.barcodeTextAlign,
+          textPosition: barcodeState.textPosition,
+          textMargin,
+          text_margin_mm: this._pxToMm(textMargin),
+          barcodeFontSize,
+          barcode_font_size_mm: this._pxToMm(barcodeFontSize),
+          fontOptions: barcodeState.fontOptions,
+          barcodeFont: barcodeState.barcodeFont,
+          background: barcodeState.background,
+          lineColor: barcodeState.lineColor,
+          margin,
+          margin_mm: this._pxToMm(margin),
           marginTop,
           margin_top_mm: this._pxToMm(marginTop),
           marginRight,
@@ -1176,6 +1234,8 @@
           margin_bottom_mm: this._pxToMm(marginBottom),
           marginLeft,
           margin_left_mm: this._pxToMm(marginLeft),
+          flat: barcodeState.flat,
+          ean128: barcodeState.ean128,
           boxWidth,
           box_width_mm: this._pxToMm(boxWidth),
           boxHeight,
@@ -1223,27 +1283,16 @@
           );
         } else if (obj.customType === "barcode") {
           const value = this.page.getElementDisplayValue(obj, "print") || " ";
-          const format = obj.format || "CODE128";
-          const barWidth = Math.max(1, Math.round(toNumber(obj.barWidth, 2)));
-          const barHeight = Math.max(1, Math.round(toNumber(obj.barHeight, 60)));
-          const mt = this._pxToMm(obj.marginTop || 0).toFixed(3);
-          const mr = this._pxToMm(obj.marginRight || 0).toFixed(3);
-          const mb = this._pxToMm(obj.marginBottom || 0).toFixed(3);
-          const ml = this._pxToMm(obj.marginLeft || 0).toFixed(3);
+          const options = this._barcodeRenderOptions(obj);
           const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
           try {
-            JsBarcode(svg, value || " ", {
-              format,
-              width: barWidth,
-              height: barHeight,
-              displayValue: !!obj.displayValue
-            });
+            JsBarcode(svg, value || " ", options);
           } catch (e) {
           }
           svg.setAttribute("width", "100%");
           svg.setAttribute("height", "100%");
           parts.push(
-            `<div class="bs-print-item bs-print-barcode" style="left:${leftMM}mm;top:${topMM}mm;width:${widthMM}mm;height:${heightMM}mm;padding:${mt}mm ${mr}mm ${mb}mm ${ml}mm;box-sizing:border-box;overflow:hidden;">${svg.outerHTML}</div>`
+            `<div class="bs-print-item bs-print-barcode" style="left:${leftMM}mm;top:${topMM}mm;width:${widthMM}mm;height:${heightMM}mm;box-sizing:border-box;overflow:hidden;">${svg.outerHTML}</div>`
           );
         }
       }
@@ -1252,14 +1301,15 @@
     _buildSheetMarkup() {
       const widthMM = this.pageWidthMM;
       const heightMM = this.pageHeightMM;
-      return `<div class="bs-print-sheet" style="width:${widthMM}mm;height:${heightMM}mm;">${this._buildLabelMarkup()}</div>`;
+      const dir = escapeHtml(this._pageDirection());
+      return `<div class="bs-print-sheet" dir="${dir}" style="width:${widthMM}mm;height:${heightMM}mm;">${this._buildLabelMarkup()}</div>`;
     }
     _buildPreviewMarkup(imageData) {
       const widthMM = this.pageWidthMM;
       const heightMM = this.pageHeightMM;
       return `
       <div class="bs-print-sheet bs-preview-sheet" style="width:${widthMM}mm;height:${heightMM}mm;">
-        <img class="bs-preview-image" src="${imageData}" alt="Label preview" />
+        <img class="bs-preview-image" src="${imageData}" alt="${escapeHtml(__("Label preview"))}" />
       </div>
     `;
     }
@@ -1389,7 +1439,7 @@
       body{display:block}
       img{display:block;width:${widthMM}mm;height:${heightMM}mm;image-rendering:crisp-edges;image-rendering:-webkit-optimize-contrast;page-break-after:always;break-after:page}
       img:last-child{page-break-after:auto;break-after:auto}
-    </style></head><body>${images}</body></html>`;
+    </style></head><body dir="${escapeHtml(this._pageDirection())}">${images}</body></html>`;
       await this._printHtmlInCurrentTab(html);
     }
     async _printAsVectorHTML(copies, templateName) {
@@ -1405,9 +1455,9 @@
       .bs-print-sheet{position:relative;break-after:page;page-break-after:always;overflow:hidden;box-sizing:border-box}
       .bs-print-sheet:last-child{break-after:auto;page-break-after:auto}
       .bs-print-item{position:absolute;box-sizing:border-box}
-      .bs-print-text{line-height:1;white-space:nowrap}
+      .bs-print-text{line-height:1;white-space:nowrap;unicode-bidi:plaintext}
       svg{shape-rendering:crispEdges}
-    </style></head><body><div class="sheet">${content}</div></body></html>`;
+    </style></head><body dir="${escapeHtml(this._pageDirection())}"><div class="sheet">${content}</div></body></html>`;
       await this._printHtmlInCurrentTab(html);
     }
     async print({ mode = "html", copies = 1, dpi = 300, templateName = null } = {}) {
@@ -1458,7 +1508,7 @@
       var _a2, _b, _c, _d, _e;
       const $panel = $("#bs-props").empty();
       if (!obj) {
-        $panel.html("<em>Select an object</em>");
+        $panel.html(`<em>${__("Select an object")}</em>`);
         return;
       }
       const unit = this.page.getDimensionUnit();
@@ -1469,44 +1519,88 @@
       const unitToPx = (value) => this._mmToPx(this.page.unitToMm(value, unit));
       const hasBinding = !!(obj.binding_key || obj.bindField);
       const bindingRows = [
-        ["Label", "label", obj.label || ""],
-        ["Field", "fieldname", obj.fieldname || ""],
-        ["Binding Key", "binding_key", obj.binding_key || obj.bindField || ""],
-        ["Source Level", "source_level", obj.source_level || ""],
-        ["Child Table", "child_table_field", obj.child_table_field || ""],
-        ["Child DocType", "child_doctype", obj.child_doctype || ""],
-        ["Field Type", "fieldtype", obj.fieldtype || ""]
+        [__("Label"), "label", obj.label || ""],
+        [__("Field"), "fieldname", obj.fieldname || ""],
+        [__("Binding Key"), "binding_key", obj.binding_key || obj.bindField || ""],
+        [__("Source Level"), "source_level", obj.source_level ? __(obj.source_level) : ""],
+        [__("Child Table"), "child_table_field", obj.child_table_field || ""],
+        [__("Child DocType"), "child_doctype", obj.child_doctype ? __(obj.child_doctype) : ""],
+        [__("Field Type"), "fieldtype", obj.fieldtype ? __(obj.fieldtype) : ""]
       ];
-      $panel.append(this._makeFieldRow(`Left (${unitLabel})`, "left", pxToUnit(obj.left || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
-      $panel.append(this._makeFieldRow(`Top (${unitLabel})`, "top", pxToUnit(obj.top || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
+      $panel.append(this._makeFieldRow(this._labelWithUnit("Left", unitLabel), "left", pxToUnit(obj.left || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
+      $panel.append(this._makeFieldRow(this._labelWithUnit("Top", unitLabel), "top", pxToUnit(obj.top || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
       for (const [label, name, value] of bindingRows) {
         if (!value && !hasBinding)
           continue;
         $panel.append(this._makeFieldRow(label, name, value, "text", { readonly: true }));
       }
-      $panel.append(this._makeFieldRow(`Width (${unitLabel})`, "width", this.page.mmToUnit(this._currentObjectWidthMm(obj), unit).toFixed(unitDigits), "number", { readonly: true }));
-      $panel.append(this._makeFieldRow(`Height (${unitLabel})`, "height", this.page.mmToUnit(this._currentObjectHeightMm(obj), unit).toFixed(unitDigits), "number", { readonly: true }));
+      $panel.append(this._makeFieldRow(this._labelWithUnit("Width", unitLabel), "width", this.page.mmToUnit(this._currentObjectWidthMm(obj), unit).toFixed(unitDigits), "number", { readonly: true }));
+      $panel.append(this._makeFieldRow(this._labelWithUnit("Height", unitLabel), "height", this.page.mmToUnit(this._currentObjectHeightMm(obj), unit).toFixed(unitDigits), "number", { readonly: true }));
       if ((_a2 = obj.isType) == null ? void 0 : _a2.call(obj, "textbox")) {
-        $panel.append(this._makeFieldRow("Text", "text", (_c = (_b = obj.baseText) != null ? _b : obj.text) != null ? _c : "", "text", { readonly: hasBinding }));
-        $panel.append(this._makeFieldRow(`Font Size (${unitLabel})`, "fontSize", pxToUnit(obj.fontSize || 12).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
-        $panel.append(this._makeSelectRow("Text Align", "textAlign", obj.textAlign || "left", [
-          { value: "left", label: "left" },
-          { value: "center", label: "center" },
-          { value: "right", label: "right" },
-          { value: "justify", label: "justify" }
+        $panel.append(this._makeFieldRow(__("Text"), "text", (_c = (_b = obj.baseText) != null ? _b : obj.text) != null ? _c : "", "text", { readonly: hasBinding }));
+        $panel.append(this._makeFieldRow(this._labelWithUnit("Font Size", unitLabel), "fontSize", pxToUnit(obj.fontSize || 12).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
+        $panel.append(this._makeSelectRow(__("Font Weight"), "fontWeight", obj.fontWeight || "normal", [
+          { value: "normal", label: __("Normal") },
+          { value: "bold", label: __("Bold") },
+          { value: "100", label: "100" },
+          { value: "200", label: "200" },
+          { value: "300", label: "300" },
+          { value: "400", label: "400" },
+          { value: "500", label: "500" },
+          { value: "600", label: "600" },
+          { value: "700", label: "700" },
+          { value: "800", label: "800" },
+          { value: "900", label: "900" }
+        ]));
+        $panel.append(this._makeSelectRow(__("Text Align"), "textAlign", obj.textAlign || "left", [
+          { value: "left", label: __("Left") },
+          { value: "center", label: __("Center") },
+          { value: "right", label: __("Right") },
+          { value: "justify", label: __("Justify") }
         ]));
       } else if (obj.customType === "barcode") {
-        $panel.append(this._makeFieldRow("Value", "barcodeValue", (_e = (_d = obj.baseBarcodeValue) != null ? _d : obj.barcodeValue) != null ? _e : "", "text", { readonly: hasBinding }));
-        $panel.append(this._makeFieldRow("Barcode Format", "format", obj.format || "CODE128", "text"));
-        $panel.append(this._makeFieldRow(`Bar Width (${unitLabel})`, "barWidth", pxToUnit(obj.barWidth || 2).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
-        $panel.append(this._makeFieldRow(`Bar Height (${unitLabel})`, "barHeight", pxToUnit(obj.barHeight || 60).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
-        $panel.append(this._makeFieldRow(`Margin Top (${unitLabel})`, "marginTop", pxToUnit(obj.marginTop || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
-        $panel.append(this._makeFieldRow(`Margin Right (${unitLabel})`, "marginRight", pxToUnit(obj.marginRight || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
-        $panel.append(this._makeFieldRow(`Margin Bottom (${unitLabel})`, "marginBottom", pxToUnit(obj.marginBottom || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
-        $panel.append(this._makeFieldRow(`Margin Left (${unitLabel})`, "marginLeft", pxToUnit(obj.marginLeft || 0).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
-        $panel.append(this._makeSelectRow("Display Value", "displayValue", obj.displayValue ? "1" : "0", [
-          { value: "0", label: "No" },
-          { value: "1", label: "Yes" }
+        const barcodeState = this._barcodeStateFromSource(obj);
+        $panel.append(this._makeFieldRow(__("Value"), "barcodeValue", (_e = (_d = obj.baseBarcodeValue) != null ? _d : obj.barcodeValue) != null ? _e : "", "text", { readonly: hasBinding }));
+        $panel.append(this._makeSelectRow(__("Barcode Format"), "format", barcodeState.format, this._barcodeFormatOptions()));
+        $panel.append(this._makeFieldRow(this._labelWithUnit("Bar Width", unitLabel), "barWidth", pxToUnit(barcodeState.barWidth).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
+        $panel.append(this._makeFieldRow(this._labelWithUnit("Bar Height", unitLabel), "barHeight", pxToUnit(barcodeState.barHeight).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
+        $panel.append(this._makeSelectRow(__("Display Value"), "displayValue", barcodeState.displayValue ? "1" : "0", [
+          { value: "0", label: __("No") },
+          { value: "1", label: __("Yes") }
+        ]));
+        $panel.append(this._makeFieldRow(__("Display Text"), "barcodeText", barcodeState.barcodeText, "text"));
+        $panel.append(this._makeSelectRow(__("Text Align"), "barcodeTextAlign", barcodeState.barcodeTextAlign, [
+          { value: "left", label: __("Left") },
+          { value: "center", label: __("Center") },
+          { value: "right", label: __("Right") }
+        ]));
+        $panel.append(this._makeSelectRow(__("Text Position"), "textPosition", barcodeState.textPosition, [
+          { value: "bottom", label: __("Bottom") },
+          { value: "top", label: __("Top") }
+        ]));
+        $panel.append(this._makeFieldRow(this._labelWithUnit("Text Margin", unitLabel), "textMargin", pxToUnit(barcodeState.textMargin).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
+        $panel.append(this._makeFieldRow(this._labelWithUnit("Font Size", unitLabel), "barcodeFontSize", pxToUnit(barcodeState.barcodeFontSize).toFixed(unitDigits), "number", { min: 0.1, step: unitStep }));
+        $panel.append(this._makeSelectRow(__("Font Options"), "fontOptions", barcodeState.fontOptions, [
+          { value: "", label: __("Normal") },
+          { value: "bold", label: __("Bold") },
+          { value: "italic", label: __("Italic") },
+          { value: "bold italic", label: __("Bold Italic") }
+        ]));
+        $panel.append(this._makeFieldRow(__("Font"), "barcodeFont", barcodeState.barcodeFont, "text"));
+        $panel.append(this._makeFieldRow(__("Line Color"), "lineColor", barcodeState.lineColor, "color"));
+        $panel.append(this._makeFieldRow(__("Background"), "background", barcodeState.background, "color"));
+        $panel.append(this._makeFieldRow(this._labelWithUnit("Margin", unitLabel), "margin", pxToUnit(barcodeState.margin).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
+        $panel.append(this._makeFieldRow(this._labelWithUnit("Margin Top", unitLabel), "marginTop", pxToUnit(barcodeState.marginTop).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
+        $panel.append(this._makeFieldRow(this._labelWithUnit("Margin Right", unitLabel), "marginRight", pxToUnit(barcodeState.marginRight).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
+        $panel.append(this._makeFieldRow(this._labelWithUnit("Margin Bottom", unitLabel), "marginBottom", pxToUnit(barcodeState.marginBottom).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
+        $panel.append(this._makeFieldRow(this._labelWithUnit("Margin Left", unitLabel), "marginLeft", pxToUnit(barcodeState.marginLeft).toFixed(unitDigits), "number", { min: 0, step: unitStep }));
+        $panel.append(this._makeSelectRow(__("Flat"), "flat", barcodeState.flat ? "1" : "0", [
+          { value: "0", label: __("No") },
+          { value: "1", label: __("Yes") }
+        ]));
+        $panel.append(this._makeSelectRow(__("EAN-128"), "ean128", barcodeState.ean128 ? "1" : "0", [
+          { value: "0", label: __("No") },
+          { value: "1", label: __("Yes") }
         ]));
       }
       const updateObject = (name, rawValue) => {
@@ -1516,10 +1610,24 @@
         if ((name === "text" || name === "barcodeValue") && hasBinding)
           return;
         let value = rawValue;
-        if (name === "displayValue")
+        const booleanNames = ["displayValue", "flat", "ean128"];
+        if (booleanNames.includes(name))
           value = rawValue === "1";
-        const unitNames = ["left", "top", "fontSize", "barWidth", "barHeight", "marginTop", "marginRight", "marginBottom", "marginLeft"];
-        if (name !== "displayValue" && rawValue === "" && unitNames.includes(name)) {
+        const unitNames = [
+          "left",
+          "top",
+          "fontSize",
+          "barWidth",
+          "barHeight",
+          "textMargin",
+          "barcodeFontSize",
+          "margin",
+          "marginTop",
+          "marginRight",
+          "marginBottom",
+          "marginLeft"
+        ];
+        if (!booleanNames.includes(name) && rawValue === "" && unitNames.includes(name)) {
           value = 0;
         }
         if (unitNames.includes(name)) {
@@ -1542,10 +1650,22 @@
           "barHeight",
           "format",
           "displayValue",
+          "barcodeText",
+          "barcodeTextAlign",
+          "textPosition",
+          "textMargin",
+          "barcodeFontSize",
+          "fontOptions",
+          "barcodeFont",
+          "background",
+          "lineColor",
+          "margin",
           "marginTop",
           "marginRight",
           "marginBottom",
-          "marginLeft"
+          "marginLeft",
+          "flat",
+          "ean128"
         ].includes(name)) {
           obj._barcodeSignature = null;
           void this._refreshBarcodeObject(obj);
@@ -1602,6 +1722,7 @@
       this._warnedBindings = /* @__PURE__ */ new Set();
       this.canvas = new BarcodeStudioCanvasController(this);
       this.canvasClearButton = null;
+      this.layoutDirection = this.getLayoutDirection();
       this.initPage();
       this.bindUi();
       this.applyStoredUiState();
@@ -1630,6 +1751,18 @@
     }
     getDimensionStep(unit = this.getDimensionUnit()) {
       return this.getDimensionConfig(unit).step;
+    }
+    getLayoutDirection() {
+      var _a2, _b, _c;
+      return ((_c = (_a2 = frappe.utils) == null ? void 0 : _a2.is_rtl) == null ? void 0 : _c.call(_a2, (_b = frappe.boot) == null ? void 0 : _b.lang)) ? "rtl" : "ltr";
+    }
+    applyLayoutDirection() {
+      var _a2, _b, _c, _d, _e, _f;
+      this.layoutDirection = this.getLayoutDirection();
+      const isRTL = this.layoutDirection === "rtl";
+      (_d = (_c = (_b = (_a2 = this.page) == null ? void 0 : _a2.wrapper) == null ? void 0 : _b.attr("dir", this.layoutDirection)) == null ? void 0 : _c.toggleClass("bs-rtl", isRTL)) == null ? void 0 : _d.toggleClass("bs-ltr", !isRTL);
+      (_f = (_e = this.page) == null ? void 0 : _e.wrapper) == null ? void 0 : _f.find("#bs-studio-root").attr("dir", this.layoutDirection);
+      return this.layoutDirection;
     }
     refreshDimensionControls() {
       const unit = this.getDimensionUnit();
@@ -1759,19 +1892,21 @@
       var _a2;
       this.page = frappe.ui.make_app_page({
         parent: this.wrapper,
-        title: "Barcode Studio",
+        title: __("Barcode Studio"),
         single_column: true
       });
       const ctx = {
         doctype: this.doctype || "Item",
         docname: this.docname || "",
         width_mm: this.pageWidthMM,
-        height_mm: this.pageHeightMM
+        height_mm: this.pageHeightMM,
+        layout_direction: this.getLayoutDirection()
       };
       const tplName = "barcode_studio";
       const tplSrc = (_a2 = frappe.templates) == null ? void 0 : _a2[tplName];
-      const html = tplSrc ? frappe.render_template(tplSrc, ctx) : "<div class='alert alert-danger m-3'>Template not built. Run <code>bench build</code>.</div>";
+      const html = tplSrc ? frappe.render_template(tplSrc, ctx) : `<div class='alert alert-danger m-3'>${__("Template not built. Run")} <code>bench build</code>.</div>`;
       this.page.wrapper.find(".page-body").html(html);
+      this.applyLayoutDirection();
       $("#bs-dt").val(this.doctype);
       $("#bs-name").val(this.docname);
       this.refreshDimensionControls();
@@ -1794,7 +1929,7 @@
         const body = $("#bs-fields-box .body");
         const hidden = body.is(":visible");
         body.toggle(!hidden);
-        $("#bs-toggle-fields").text(hidden ? "Show" : "Hide");
+        $("#bs-toggle-fields").text(hidden ? __("Show") : __("Hide"));
       });
       $("#bs-toggle-props").on("click", () => this.setPropertiesPanelVisible(false));
       $("#bs-show-props").on("click", () => this.setPropertiesPanelVisible(true));
@@ -1816,7 +1951,7 @@
           stored[ct] = el.classList.contains("open");
         });
         localStorage.setItem(uiKey, JSON.stringify(stored));
-        $("#bs-fields-collapse-toggle").text(anyOpen ? "Expand All" : "Collapse All");
+        $("#bs-fields-collapse-toggle").text(anyOpen ? __("Expand All") : __("Collapse All"));
       });
       $("#bs-apply").on("click", () => this.applyPage());
       $("#bs-reload").on("click", () => void this.bootstrap());
@@ -1897,6 +2032,7 @@
       const snap = this.state.get("snap", 1);
       const unit = this.state.get("unit", BARCODE_STUDIO_DEFAULT_UNIT);
       const propsVisible = !this.state.get("props_collapsed", false);
+      this.applyLayoutDirection();
       this.toggleTheme(dark, { persist: false });
       this.setDimensionUnit(unit, { persist: false, refresh: true });
       this.setPropertiesPanelVisible(propsVisible, { persist: false });
@@ -1908,7 +2044,7 @@
       var _a2, _b, _c, _d, _e, _f;
       const isVisible = !!visible;
       $(".bs-layout").toggleClass("props-collapsed", !isVisible);
-      $("#bs-toggle-props").text(isVisible ? "Hide" : "Show");
+      $("#bs-toggle-props").text(isVisible ? __("Hide") : __("Show"));
       $("#bs-show-props").toggle(!isVisible);
       (_c = (_b = (_a2 = this.canvas) == null ? void 0 : _a2.fabricCanvas) == null ? void 0 : _b.calcOffset) == null ? void 0 : _c.call(_b);
       (_f = (_e = (_d = this.canvas) == null ? void 0 : _d.fabricCanvas) == null ? void 0 : _e.requestRenderAll) == null ? void 0 : _f.call(_e);
@@ -2020,7 +2156,7 @@
           method: "frappe.client.get_list",
           args: { doctype: "Barcode Template", fields: ["name"], limit_page_length: 200 }
         });
-        const select = $("#bs-template").empty().append("<option value=''>-- Template --</option>");
+        const select = $("#bs-template").empty().append(`<option value="">-- ${__("Template")} --</option>`);
         for (const item of response.message || []) {
           select.append(`<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`);
         }
@@ -2040,13 +2176,14 @@
       const forceOpen = !!query;
       if (this.configMessage) {
         $panel.html(`<div class="text-muted small">${escapeHtml(this.configMessage)}</div>`);
-        $("#bs-fields-collapse-toggle").text("Expand All");
+        $("#bs-fields-collapse-toggle").text(__("Expand All"));
         return;
       }
       const makeChip = (label, dataset, pathShown) => {
+        const displayLabel = __(label || "");
         const chip = $(`
         <div class="bs-field-chip" draggable="true" title="${escapeHtml(pathShown || dataset.path || "")}">
-          <div class="label">${escapeHtml(label || "")}</div>
+          <div class="label">${escapeHtml(displayLabel)}</div>
           <div class="path">${escapeHtml(pathShown || dataset.path || "")}</div>
         </div>
       `);
@@ -2078,9 +2215,9 @@
         const group = $(`
         <div class="bs-field-group ${open ? "open" : ""}" ${groupClass ? `data-ct="${escapeHtml(groupClass)}"` : ""}>
           <div class="fg-head">
-            <div class="fg-title">${escapeHtml(title)}</div>
+            <div class="fg-title">${escapeHtml(__(title || ""))}</div>
             <div class="fg-actions${hasToggle ? "" : " text-muted small"}">
-              ${hasToggle ? `<button class="btn btn-xs btn-light fg-toggle" type="button">${open ? "\u2212" : "+"}</button>` : "Fields"}
+              ${hasToggle ? `<button class="btn btn-xs btn-light fg-toggle" type="button">${open ? "\u2212" : "+"}</button>` : __("Fields")}
             </div>
           </div>
           <div class="fg-body"><div class="d-flex flex-wrap"></div></div>
@@ -2152,16 +2289,16 @@
         }
       }
       if (documentFields.length) {
-        makeGroup("Document", "", true, documentFields, false);
+        makeGroup(__("Document"), "", true, documentFields, false);
       }
       for (const [groupKey, groupInfo] of childGroups.entries()) {
         makeGroup(groupInfo.title, groupKey, groupInfo.open, groupInfo.items);
       }
       if (!$panel.children().length) {
-        $panel.html("<div class='text-muted'>No fields</div>");
+        $panel.html(`<div class="text-muted">${__("No fields")}</div>`);
       }
       const anyOpen = $(".bs-field-group[data-ct]").toArray().some((el) => el.classList.contains("open"));
-      $("#bs-fields-collapse-toggle").text(anyOpen ? "Collapse All" : "Expand All");
+      $("#bs-fields-collapse-toggle").text(anyOpen ? __("Collapse All") : __("Expand All"));
     }
     applyPage() {
       const unit = this.getDimensionUnit();
@@ -2221,7 +2358,7 @@
           {
             fieldname: "template_name",
             fieldtype: "Data",
-            label: "Template Name",
+            label: __("Template Name"),
             reqd: 1,
             default: this.templateName || "",
             read_only: isEdit ? 1 : 0
@@ -2229,14 +2366,14 @@
           {
             fieldname: "page_width_mm",
             fieldtype: "Float",
-            label: `Width (${unitLabel})`,
+            label: `${__("Width")} (${unitLabel})`,
             reqd: 1,
             default: this.formatDimension(this.canvas.pageWidthMM, unit)
           },
           {
             fieldname: "page_height_mm",
             fieldtype: "Float",
-            label: `Height (${unitLabel})`,
+            label: `${__("Height")} (${unitLabel})`,
             reqd: 1,
             default: this.formatDimension(this.canvas.pageHeightMM, unit)
           }
@@ -2362,4 +2499,4 @@
   window.mysysBarcodeStudio = window.mysysBarcodeStudio || {};
   window.mysysBarcodeStudio.mountBarcodeStudio = mountBarcodeStudio;
 })();
-//# sourceMappingURL=barcode_studio.bundle.QJ5YKIA4.js.map
+//# sourceMappingURL=barcode_studio.bundle.7UANOEQ2.js.map
