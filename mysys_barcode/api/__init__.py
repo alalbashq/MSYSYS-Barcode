@@ -7,7 +7,7 @@ from frappe import _
 from frappe.utils import cint, cstr
 from frappe.utils.safe_exec import safe_eval
 
-from .zpl.render import render_zpl
+from ..zpl.render import render_zpl
 
 
 BARCODE_FIELD_TYPES = {
@@ -805,7 +805,7 @@ def qbp_templates():
 
 @frappe.whitelist()
 def record_barcode_print(
-	parent_doctype, parent_name, child_field=None, child_row_names=None, copies=1, template_name=None
+	parent_doctype, parent_name, child_field=None, child_row_names=None, copies=1, template_name=None, printer_mode="HTML"
 ):
 	import json
 
@@ -819,7 +819,6 @@ def record_barcode_print(
 
 	copies = int(copies or 1)
 
-	# DocType احترافي لتوثيق الطباعة (اختياري لكن موصى به)
 	for cdn in child_row_names or []:
 		frappe.get_doc(
 			{
@@ -830,11 +829,11 @@ def record_barcode_print(
 				"child_row_name": cdn,
 				"copies": copies,
 				"template_name": template_name,
+				"printer_mode": printer_mode,
 				"printed_by": frappe.session.user,
 			}
 		).insert(ignore_permissions=True)
 
-	# بثّ فوري لتحديث أي شاشة متابعة
 	from frappe.utils import now_datetime
 
 	frappe.publish_realtime(
@@ -846,6 +845,7 @@ def record_barcode_print(
 			"rows": child_row_names or [],
 			"copies": copies,
 			"template_name": template_name,
+			"printer_mode": printer_mode,
 			"printed_on": now_datetime().strftime("%Y-%m-%d %H:%M:%S"),
 		},
 		doctype=parent_doctype,

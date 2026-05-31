@@ -54,15 +54,32 @@ export class BarcodeStudioPage {
     this.canvas = new BarcodeStudioCanvasController(this);
     this.canvasClearButton = null;
     this.layoutDirection = this.getLayoutDirection();
+    this._qzUnsubscribe = null;
+    this._qzPrinters = [];
+    this._templatePrinterSettings = this.defaultTemplatePrinterSettings();
 
     this.initPage();
     this.bindUi();
+    this._onPrinterModeChange();
     this.applyStoredUiState();
     void this.bootstrap();
+    this.initQz();
   }
 
   getDimensionUnit() {
     return BARCODE_STUDIO_DIMENSION_UNITS[this.dimensionUnit] ? this.dimensionUnit : BARCODE_STUDIO_DEFAULT_UNIT;
+  }
+
+  defaultTemplatePrinterSettings() {
+    return {
+      printer_mode: "HTML",
+      printer_name: "",
+      printer_dpi: 203,
+      label_width_mm: this.pageWidthMM || BARCODE_STUDIO_DEFAULT_WIDTH_MM,
+      label_height_mm: this.pageHeightMM || BARCODE_STUDIO_DEFAULT_HEIGHT_MM,
+      gap_mm: 2,
+      copies: 1,
+    };
   }
 
   getDimensionConfig(unit = this.getDimensionUnit()) {
@@ -138,6 +155,8 @@ export class BarcodeStudioPage {
 
   destroy() {
     this._loadToken += 1;
+    this._qzUnsubscribe?.();
+    this._qzUnsubscribe = null;
     this.canvas?.destroy?.();
   }
 
@@ -324,6 +343,15 @@ export class BarcodeStudioPage {
     $("#bs-reload").on("click", () => void this.bootstrap());
     $("#bs-print").on("click", () => void this.doPrint());
     $("#bs-save").on("click", () => this.saveTemplateDialog());
+    $("#bs-printer-mode").on("change", () => this._onPrinterModeChange());
+    $("#bs-qz-connect").on("click", () => void this.qzConnect());
+    $("#bs-qz-refresh-printers").on("click", () => void this.qzRefreshPrinters());
+    $("#bs-qz-gen-cert").on("click", () => void this.qzGenerateCert());
+    $("#bs-qz-dl-cert").on("click", () => void this.qzDownloadCert());
+    $("#bs-test-qz").on("click", () => void this.qzTestPrint());
+    $("#bs-qz-printer").on("change", (event) => {
+      if (window.__qz_security__) window.__qz_security__.savePrinterName(event.target.value || "");
+    });
     $("#bs-add-text").on("click", () => this.canvas.addComponent("text"));
     $("#bs-add-barcode").on("click", () => this.canvas.addComponent("barcode"));
     $("#bs-zoom-out").on("click", () => this.canvas.setZoom(this.canvas.scale - 0.1, { persist: true }));
@@ -453,6 +481,8 @@ export class BarcodeStudioPage {
     $("#bs-name").val(this.docname);
     this.templateDesignFields = [];
     this.templateSourceDoctype = "";
+    this._templatePrinterMode = "HTML";
+    this._templatePrinterSettings = this.defaultTemplatePrinterSettings();
 
     await this.loadBarcodeConfig();
     if (token !== this._loadToken) return;
@@ -730,7 +760,20 @@ export class BarcodeStudioPage {
       this.templateName = doc.name;
       this.templateSourceDoctype = doc.source_doctype || "";
       this.templateDesignFields = Array.isArray(doc.design_fields) ? doc.design_fields : [];
+      this._templatePrinterMode = doc.printer_mode || "HTML";
+      this._templatePrinterSettings = {
+        printer_mode: this._templatePrinterMode,
+        printer_name: doc.printer_name || "",
+        printer_dpi: Number(doc.printer_dpi || doc.dpi || 203),
+        label_width_mm: Number(doc.label_width_mm || doc.page_width_mm || doc.width_mm || this.canvas.pageWidthMM),
+        label_height_mm: Number(doc.label_height_mm || doc.page_height_mm || doc.height_mm || this.canvas.pageHeightMM),
+        gap_mm: Number(doc.gap_mm || 2),
+        copies: Math.max(1, Number.parseInt(doc.copies || "1", 10) || 1),
+      };
       await this.canvas.loadTemplate(doc);
+      $("#bs-copies").val(this._templatePrinterSettings.copies);
+      $("#bs-printer-mode").val(this._templatePrinterMode);
+      this._onPrinterModeChange();
       $("#bs-template").val(this.templateName);
       return true;
     } catch (error) {
@@ -783,6 +826,8 @@ export class BarcodeStudioPage {
           page_height_mm: pageHeightMM,
           width_mm: pageWidthMM,
           height_mm: pageHeightMM,
+          label_width_mm: pageWidthMM,
+          label_height_mm: pageHeightMM,
           source_doctype: this.doctype,
         };
 
@@ -842,6 +887,24 @@ export class BarcodeStudioPage {
                 value: pageHeightMM,
               },
             });
+            await frappe.call({
+              method: "frappe.client.set_value",
+              args: {
+                doctype: "Barcode Template",
+                name: this.templateName,
+                fieldname: "label_width_mm",
+                value: pageWidthMM,
+              },
+            });
+            await frappe.call({
+              method: "frappe.client.set_value",
+              args: {
+                doctype: "Barcode Template",
+                name: this.templateName,
+                fieldname: "label_height_mm",
+                value: pageHeightMM,
+              },
+            });
             dialog.hide();
             frappe.show_alert({ message: __("Template updated"), indicator: "green" });
           } else {
@@ -875,11 +938,227 @@ export class BarcodeStudioPage {
     const mode = ($("#bs-output").val() || "html").toLowerCase();
     let copies = Number.parseInt($("#bs-copies").val() || "0", 10);
     if (!(copies > 0)) {
-      copies = this.resolveCopiesFromData() || 1;
+      copies = this.resolveCopiesFromData() || this._templatePrinterSettings?.copies || 1;
       $("#bs-copies").val(copies);
     }
     const dpi = Number.parseInt($("#bs-dpi").val() || "300", 10);
-    return this.canvas.print({ mode, copies, dpi, templateName: this.templateName || null });
+
+    const printerMode = $("#bs-printer-mode").val() || this._templatePrinterMode || "HTML";
+
+    if (printerMode === "QZ ZPL" || printerMode === "QZ TSPL") {
+      return this.qzPrint(printerMode, copies);
+    }
+
+    return this.canvas.print({ mode, copies, dpi, templateName: this.templateName || null, printerMode });
+  }
+
+  async qzPrint(printerMode, copies) {
+    const elements = this.canvas.serializeObjects();
+    const renderData = this.getRenderData();
+    const settings = this._templatePrinterSettings || this.defaultTemplatePrinterSettings();
+    const template = {
+      label_width_mm: this.canvas.pageWidthMM,
+      label_height_mm: this.canvas.pageHeightMM,
+      printer_dpi: Number(settings.printer_dpi || 203),
+      gap_mm: Number(settings.gap_mm || 2),
+    };
+    const printerName = settings.printer_name || $("#bs-qz-printer").val() || null;
+
+    if (!window.__qz_print_helpers__) {
+      frappe.msgprint(__("QZ print helpers not loaded."));
+      return;
+    }
+    if (!elements.length) {
+      frappe.msgprint(__("Template has no layout."));
+      return;
+    }
+    const emptyBarcode = elements.find((element) => {
+      const type = element.customType || element.type || "";
+      return type === "barcode" && !window.__qz_print_helpers__.getElementValue(element, renderData).trim();
+    });
+    if (emptyBarcode) {
+      frappe.msgprint(__("Barcode value is empty."));
+      return;
+    }
+
+    let raw;
+    if (printerMode === "QZ ZPL") {
+      raw = window.__qz_print_helpers__.buildZPL({ template, elements, renderData });
+    } else {
+      raw = window.__qz_print_helpers__.buildTSPL({ template, elements, renderData });
+    }
+
+    if (!window.__qz_security__) {
+      frappe.msgprint(__("QZ Tray security module not loaded."));
+      return;
+    }
+
+    try {
+      await window.__qz_security__.printRaw({ printerName, raw, copies });
+      await this.canvas._logPrint(copies, this.templateName || null, printerMode);
+      frappe.show_alert({ message: __("Print job sent to QZ Tray"), indicator: "green" });
+    } catch (err) {
+      console.error("QZ print failed", err);
+      frappe.msgprint(__("Failed to send to QZ Tray. Make sure QZ Tray is running and the printer is correct."));
+      frappe.confirm(
+        __("Use browser printing instead?"),
+        () => void this.canvas.print({
+          mode: ($("#bs-output").val() || "html").toLowerCase(),
+          copies,
+          dpi: Number.parseInt($("#bs-dpi").val() || "300", 10),
+          templateName: this.templateName || null,
+          printerMode,
+        })
+      );
+    }
+  }
+
+  initQz(retries) {
+    if (retries === undefined) retries = 10;
+    if (!window.__qz_security__) return;
+    if (typeof qz === "undefined") {
+      if (retries <= 0) { console.warn("QZ Tray library failed to load after multiple retries"); return; }
+      console.warn("QZ Tray library (qz-tray) not loaded yet, will retry (" + retries + " left)");
+      setTimeout(() => this.initQz(retries - 1), 1000);
+      return;
+    }
+    const qzsec = window.__qz_security__;
+    this._qzUnsubscribe = qzsec.onStateChange((state) => {
+      this.updateQzUi(state);
+    });
+    const currentState = qzsec.getConnectionState();
+    this.updateQzUi(currentState);
+    if (currentState.connected) {
+      void this.qzRefreshPrinters();
+    }
+    const saved = qzsec.getSavedPrinterName();
+    if (saved) $("#bs-qz-printer").val(saved);
+  }
+
+  updateQzUi(state) {
+    const statusEl = $("#bs-qz-status");
+    const certEl = $("#bs-qz-cert-status");
+    const connectBtn = $("#bs-qz-connect");
+
+    if (state.connected) {
+      statusEl.text(__("Connected")).removeClass("badge-secondary badge-danger").addClass("badge-success");
+      connectBtn.text(__("Disconnect"));
+    } else if (state.connecting) {
+      statusEl.text(__("Connecting...")).removeClass("badge-success badge-danger").addClass("badge-warning");
+      connectBtn.text(__("Connecting"));
+    } else {
+      statusEl.text(__("Not Connected")).removeClass("badge-success badge-warning").addClass("badge-danger");
+      connectBtn.text(__("Connect"));
+    }
+
+    certEl.text(state.certStatus === "trusted" ? __("Trusted") : state.certStatus === "untrusted" ? __("Untrusted") : __("Unknown"));
+    certEl.removeClass("badge-success badge-danger badge-warning").addClass(
+      state.certStatus === "trusted" ? "badge-success" : state.certStatus === "untrusted" ? "badge-danger" : "badge-secondary"
+    );
+  }
+
+  _onPrinterModeChange() {
+    const mode = $("#bs-printer-mode").val() || "HTML";
+    this._templatePrinterMode = mode;
+    const isQz = mode === "QZ ZPL" || mode === "QZ TSPL";
+    $(".bs-print-cluster").toggleClass("is-qz-mode", isQz);
+    $("#bs-output, #bs-dpi").toggle(!isQz);
+    $(".bs-qz-cluster").toggle(isQz);
+  }
+
+  async qzConnect() {
+    if (!window.__qz_security__) return;
+    const state = window.__qz_security__.getConnectionState();
+    if (state.connected) {
+      await window.__qz_security__.disconnect();
+    } else {
+      const connected = await window.__qz_security__.connect();
+      if (connected && window.__qz_security__.getConnectionState().connected) {
+        await this.qzRefreshPrinters();
+      } else {
+        frappe.msgprint(__("Could not connect to QZ Tray. Make sure it is installed, running, and the certificate is imported."));
+      }
+    }
+  }
+
+  async qzRefreshPrinters() {
+    if (!window.__qz_security__) return;
+    const qz = window.__qz_security__;
+    try {
+      const printers = await qz.findPrinters();
+      this._qzPrinters = printers || [];
+      const select = $("#bs-qz-printer").empty();
+      select.append(`<option value="">-- ${__("Select Printer")} --</option>`);
+      for (const p of this._qzPrinters) {
+        const name = typeof p === "string" ? p : (p.name || p);
+        select.append($("<option>").val(name).text(name));
+      }
+      if (!this._qzPrinters.length) {
+        frappe.msgprint(__("No printers found in QZ Tray."));
+        return;
+      }
+      const configured = this._templatePrinterSettings?.printer_name || "";
+      const saved = qz.getSavedPrinterName();
+      const selected = this._qzPrinters.length === 1
+        ? (typeof this._qzPrinters[0] === "string" ? this._qzPrinters[0] : this._qzPrinters[0].name)
+        : configured || saved;
+      if (selected) {
+        select.val(selected);
+        if (select.val()) qz.savePrinterName(selected);
+      }
+    } catch (err) {
+      console.error("Failed to find printers", err);
+      frappe.msgprint(__("Could not find printers. Make sure QZ Tray is running."));
+    }
+  }
+
+  async qzGenerateCert() {
+    try {
+      const resp = await frappe.call({ method: "mysys_barcode.api.qz.setup_qz_certificate" });
+      const msg = resp.message || {};
+      frappe.show_alert({
+        message: msg.message || __("Certificate generated"),
+        indicator: msg.status === "exists" ? "orange" : "green",
+      });
+    } catch (err) {
+      console.error("Failed to generate certificate", err);
+      frappe.msgprint(__("Failed to generate QZ certificate. Only System Manager can do this."));
+    }
+  }
+
+  async qzDownloadCert() {
+    if (!window.__qz_security__) return;
+    await window.__qz_security__.downloadCertificate();
+  }
+
+  async qzTestPrint() {
+    if (!window.__qz_security__ || !window.__qz_print_helpers__) {
+      frappe.msgprint(__("QZ modules not loaded."));
+      return;
+    }
+
+    const printerMode = $("#bs-printer-mode").val() || this._templatePrinterMode || "QZ ZPL";
+    const widthMM = this.canvas.pageWidthMM || 50;
+    const heightMM = this.canvas.pageHeightMM || 30;
+    const settings = this._templatePrinterSettings || this.defaultTemplatePrinterSettings();
+    const dpi = Number(settings.printer_dpi || 203);
+    const gapMM = Number(settings.gap_mm || 2);
+    const printerName = settings.printer_name || $("#bs-qz-printer").val() || null;
+
+    let raw;
+    if (printerMode === "QZ TSPL") {
+      raw = "SIZE " + widthMM + " mm," + heightMM + " mm\nGAP " + gapMM + " mm,0\nCLS\nTEXT 30,30,\"3\",0,1,1,\"QZ Tray Test\"\nPRINT 1";
+    } else {
+      raw = "^XA\n^PW" + Math.round(widthMM * dpi / 25.4) + "\n^LL" + Math.round(heightMM * dpi / 25.4) + "\n^FO30,30^A0N,30,30^FDQZ Tray Test^FS\n^XZ";
+    }
+
+    try {
+      await window.__qz_security__.printRaw({ printerName, raw, copies: 1 });
+      frappe.show_alert({ message: __("Test print sent to QZ Tray"), indicator: "green" });
+    } catch (err) {
+      console.error("Test print failed", err);
+      frappe.msgprint(__("Test print failed. Make sure QZ Tray is running and a printer is selected."));
+    }
   }
 }
 

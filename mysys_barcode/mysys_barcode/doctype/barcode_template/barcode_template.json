@@ -10,6 +10,13 @@
   "template_name",
   "source_doctype",
   "output_type",
+  "printer_mode",
+  "printer_name",
+  "printer_dpi",
+  "label_width_mm",
+  "label_height_mm",
+  "gap_mm",
+  "copies",
   "width_mm",
   "height_mm",
   "dpi",
@@ -47,6 +54,47 @@
    "fieldtype": "Select",
    "label": "Output Type",
    "options": "HTML\nZPL"
+  },
+  {
+   "default": "HTML",
+   "fieldname": "printer_mode",
+   "fieldtype": "Select",
+   "label": "Printer Mode",
+   "options": "HTML\nQZ ZPL\nQZ TSPL"
+  },
+  {
+   "fieldname": "printer_name",
+   "fieldtype": "Data",
+   "label": "Printer Name"
+  },
+  {
+   "default": "203",
+   "fieldname": "printer_dpi",
+   "fieldtype": "Select",
+   "label": "Printer DPI",
+   "options": "203\n300"
+  },
+  {
+   "fieldname": "label_width_mm",
+   "fieldtype": "Float",
+   "label": "Label Width (mm)"
+  },
+  {
+   "fieldname": "label_height_mm",
+   "fieldtype": "Float",
+   "label": "Label Height (mm)"
+  },
+  {
+   "default": "2",
+   "fieldname": "gap_mm",
+   "fieldtype": "Float",
+   "label": "Gap (mm)"
+  },
+  {
+   "default": "1",
+   "fieldname": "copies",
+   "fieldtype": "Int",
+   "label": "Copies"
   },
   {
    "default": "40",

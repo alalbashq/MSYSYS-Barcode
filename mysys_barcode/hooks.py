@@ -30,10 +30,13 @@ app_include_css = [
 ]
 app_include_js = [
 	"/assets/mysys_barcode/js/tabulator/tabulator.min.js",
+	"/assets/mysys_barcode/js/qz-tray.min.js",
 	"mysys_barcode_tool.bundle.js",
 	"/assets/mysys_barcode/js/fabric.js",
 	"/assets/mysys_barcode/js/JsBarcode.all.min.js",
 	"/assets/mysys_barcode/js/dialog.js",
+	"/assets/mysys_barcode/js/qz_security.js?v=20260530-connect-fix",
+	"/assets/mysys_barcode/js/qz_print_helpers.js",
 ]
 # include js, css files in header of desk.html
 # app_include_css = "/assets/mysys_barcode/css/mysys_barcode.css"

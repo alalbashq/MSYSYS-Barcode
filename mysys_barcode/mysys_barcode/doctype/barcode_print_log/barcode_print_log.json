@@ -5,51 +5,59 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "parent_doctype",
-  "parent_name",
-  "child_field",
-  "child_row_name",
-  "copies",
-  "template_name",
-  "printed_by"
- ],
- "fields": [
-  {
-   "fieldname": "parent_doctype",
-   "fieldtype": "Data",
-   "label": "parent_doctype"
-  },
-  {
-   "fieldname": "parent_name",
-   "fieldtype": "Data",
-   "label": "parent_name"
-  },
-  {
-   "fieldname": "child_field",
-   "fieldtype": "Data",
-   "label": "child_field"
-  },
-  {
-   "fieldname": "child_row_name",
-   "fieldtype": "Data",
-   "label": "child_row_name"
-  },
-  {
-   "fieldname": "copies",
-   "fieldtype": "Data",
-   "label": "copies"
-  },
-  {
-   "fieldname": "template_name",
-   "fieldtype": "Data",
-   "label": "template_name"
-  },
-  {
-   "fieldname": "printed_by",
-   "fieldtype": "Data",
-   "label": "printed_by"
-  }
- ],
+   "parent_doctype",
+   "parent_name",
+   "child_field",
+   "child_row_name",
+   "copies",
+   "template_name",
+   "printer_mode",
+   "printed_by"
+  ],
+  "fields": [
+   {
+    "fieldname": "parent_doctype",
+    "fieldtype": "Data",
+    "label": "parent_doctype"
+   },
+   {
+    "fieldname": "parent_name",
+    "fieldtype": "Data",
+    "label": "parent_name"
+   },
+   {
+    "fieldname": "child_field",
+    "fieldtype": "Data",
+    "label": "child_field"
+   },
+   {
+    "fieldname": "child_row_name",
+    "fieldtype": "Data",
+    "label": "child_row_name"
+   },
+   {
+    "fieldname": "copies",
+    "fieldtype": "Data",
+    "label": "copies"
+   },
+   {
+    "fieldname": "template_name",
+    "fieldtype": "Data",
+    "label": "template_name"
+   },
+   {
+    "fieldname": "printer_mode",
+    "fieldtype": "Select",
+    "label": "Print Mode",
+    "options": "HTML\nQZ ZPL\nQZ TSPL",
+    "default": "HTML"
+   },
+   {
+    "fieldname": "printed_by",
+    "fieldtype": "Data",
+    "label": "printed_by"
+   }
+  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],

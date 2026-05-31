@@ -117,6 +117,47 @@ Opening the first selected item in Barcode Studio.,سيتم فتح أول صنف
 No Barcode DocType configuration found for this DocType. Please create one first.,لا يوجد إعداد نوع مستند باركود لهذا النوع. الرجاء إنشاؤه أولًا.
 Popup blocked. Allow popups for printing.,تم حظر النافذة المنبثقة. اسمح بالنوافذ المنبثقة للطباعة.
 Unable to open print preview.,تعذر فتح معاينة الطباعة.
+QZ Tray,QZ Tray
+Printer Mode,وضع الطابعة
+Printer Name,اسم الطابعة
+Printer DPI,دقة الطابعة
+Label Width (mm),عرض الملصق (مم)
+Label Height (mm),ارتفاع الملصق (مم)
+Gap (mm),الفاصل (مم)
+Connect,اتصال
+Disconnect,قطع الاتصال
+Connected,متصل
+Not Connected,غير متصل
+Connecting,جارٍ الاتصال
+Connecting...,جارٍ الاتصال...
+Trusted,موثوق
+Untrusted,غير موثوق
+Unknown,غير معروف
+Printers,الطابعات
+Refresh Printers,تحديث الطابعات
+Select Printer,اختر الطابعة
+Generate QZ Certificate,إنشاء شهادة QZ
+Download Certificate,تنزيل الشهادة
+Gen Cert,إنشاء شهادة
+DL Cert,تنزيل الشهادة
+Certificate generated,تم إنشاء الشهادة
+Test QZ,اختبار QZ
+Test QZ Print,اختبار طباعة QZ
+QZ modules not loaded.,لم يتم تحميل وحدات QZ.
+QZ print helpers not loaded.,لم يتم تحميل أدوات طباعة QZ.
+QZ Tray security module not loaded.,لم يتم تحميل وحدة أمان QZ Tray.
+Print job sent to QZ Tray,تم إرسال مهمة الطباعة إلى QZ Tray
+Test print sent to QZ Tray,تم إرسال الطباعة التجريبية إلى QZ Tray
+Failed to download QZ Tray certificate.,تعذر تنزيل شهادة QZ Tray.
+Failed to generate QZ certificate. Only System Manager can do this.,تعذر إنشاء شهادة QZ. هذه العملية متاحة لمدير النظام فقط.
+Failed to send to QZ Tray. Make sure QZ Tray is running and the printer is correct.,تعذر الإرسال إلى QZ Tray. تأكد أن QZ Tray يعمل وأن الطابعة صحيحة.
+Could not find printers. Make sure QZ Tray is running.,تعذر العثور على الطابعات. تأكد أن QZ Tray يعمل.
+"Could not connect to QZ Tray. Make sure it is installed, running, and the certificate is imported.",تعذر الاتصال بـ QZ Tray. تأكد أنه مثبت ويعمل وأن الشهادة مستوردة.
+No printers found in QZ Tray.,لم يتم العثور على طابعات في QZ Tray.
+Test print failed. Make sure QZ Tray is running and a printer is selected.,فشلت الطباعة التجريبية. تأكد أن QZ Tray يعمل وأن الطابعة محددة.
+Barcode value is empty.,قيمة الباركود فارغة.
+Use browser printing instead?,هل تريد استخدام طباعة المتصفح بدلًا من ذلك؟
+"Import the downloaded certificate into QZ Tray Site Manager, then restart QZ Tray.",استورد الشهادة التي تم تنزيلها في Site Manager داخل QZ Tray ثم أعد تشغيل QZ Tray.
 Add Text,إضافة نص
 Add Barcode,إضافة باركود
 Zoom In,تكبير

@@ -1251,7 +1251,7 @@ export class BarcodeStudioCanvasController {
     preview.html(this._buildPreviewMarkup(imageData));
   }
 
-  _resolvePrintPayload(copies, templateName) {
+  _resolvePrintPayload(copies, templateName, printerMode) {
     const context = this.page.getStudioContext();
 
     return {
@@ -1261,11 +1261,12 @@ export class BarcodeStudioCanvasController {
       child_row_names: "[]",
       copies,
       template_name: templateName || null,
+      printer_mode: printerMode || "HTML",
     };
   }
 
-  async _logPrint(copies, templateName) {
-    const payload = this._resolvePrintPayload(copies, templateName);
+  async _logPrint(copies, templateName, printerMode) {
+    const payload = this._resolvePrintPayload(copies, templateName, printerMode);
     try {
       await frappe.call({
         method: "mysys_barcode.api.record_barcode_print",
@@ -1368,12 +1369,12 @@ export class BarcodeStudioCanvasController {
     });
   }
 
-  async _printAsHiDpiImage(copies, dpi, templateName) {
+  async _printAsHiDpiImage(copies, dpi, templateName, printerMode) {
     const multiplier = Math.max(1, dpi / 96);
     const imageData = await this._renderPreviewImageData(multiplier);
     const widthMM = this.pageWidthMM;
     const heightMM = this.pageHeightMM;
-    await this._logPrint(copies, templateName);
+    await this._logPrint(copies, templateName, printerMode);
 
     const images = Array.from({ length: copies }, () => `<img src="${imageData}" />`).join("");
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
@@ -1387,11 +1388,11 @@ export class BarcodeStudioCanvasController {
     await this._printHtmlInCurrentTab(html);
   }
 
-  async _printAsVectorHTML(copies, templateName) {
+  async _printAsVectorHTML(copies, templateName, printerMode) {
     const widthMM = this.pageWidthMM;
     const heightMM = this.pageHeightMM;
 
-    await this._logPrint(copies, templateName);
+    await this._logPrint(copies, templateName, printerMode);
 
     const label = this._buildSheetMarkup();
     const content = Array.from({ length: copies }, () => label).join("");
@@ -1410,7 +1411,7 @@ export class BarcodeStudioCanvasController {
     await this._printHtmlInCurrentTab(html);
   }
 
-  async print({ mode = "html", copies = 1, dpi = 300, templateName = null } = {}) {
+  async print({ mode = "html", copies = 1, dpi = 300, templateName = null, printerMode = "HTML" } = {}) {
     if (!this.fabricCanvas) {
       frappe.msgprint(__("Canvas is not ready."));
       return;
@@ -1418,9 +1419,9 @@ export class BarcodeStudioCanvasController {
     await this.preview();
     const outputMode = String(mode || "html").toLowerCase();
     if (outputMode === "image") {
-      return this._printAsHiDpiImage(copies, dpi, templateName);
+      return this._printAsHiDpiImage(copies, dpi, templateName, printerMode);
     }
-    return this._printAsVectorHTML(copies, templateName);
+    return this._printAsVectorHTML(copies, templateName, printerMode);
   }
 
   _makeFieldRow(label, name, value, type = "text", extra = {}) {

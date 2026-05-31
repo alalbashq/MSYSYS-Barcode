@@ -5,3 +5,7 @@
 tags
 node_modules
 __pycache__
+
+# QZ Tray private keys (never commit)
+sites/*/private/qz/private-key.pem
+sites/*/private/qz/digital-certificate.crt
